@@ -1,0 +1,18 @@
+Segue um desafio, valendo um bônus de 10% na nota do Projeto 1, i.e., se a nota do projeto for de 0 a 10, este bônus pode incrementar 1sua nota em 1 ponto (com o teto de 10, sem propagar bônus para o Projeto 2).
+
+Escreva um programa (em Python, C ou C++, usando OpenCV) que acesse sua web-camera, e substitua o fundo do vídeo capturado ao vivo por uma imagem pré-definida. Chamaremos essa imagem pré-definida de virtual_background. A ideia é implementar algo parecido com os sistemas de virtual background que são usados em alguns programas de videoconferência. 
+
+Isso pode ser feito de várias maneiras, seguem algumas sugestões:
+
+- A maneira mais simples é pré definir uma cor padrão do fundo (tipicamente verde). Essa técnica se chama chroma-key e é amplamente usada em estúdios de TV. Cada pixel da imagem é analisado e se ele for parecido com a cor pré-definida, ele deve ser substituído pelo pixel do virtual_background. Essa técnica  tem a vantagem de ser mais robusta e rápida que outras técnicas (como as abaixo), mas tem a grande desvantagem de requerer que o fundo tenha um padrão uniforme que cubra toda a área capturada pela câmera. Apesar de ser simples, ela não é super trivial, pois é necessário que haja uma tolerância nos valores de cor RGB para se comparar com a imagem do fundo. 
+- Outra técnica bem simples é background subtraction, que requer que você inicialmente capture uma imagem de referência do ambiente (ou fundo/background ), sem a presença de atores ou de objetos móveis. A ideia é substituir os pixels de que são parecidos com os respectivos pixels da imagem de referência por pixels da imagem virtual_background . 
+- Uma alternativa mais complexa, que não requer o uso de uma cor pré-definida nem de imagem de referência é o uso de métodos de detecção e segmentação de pessoas na imagem. Isso é mais complexo mas além de não requerer uma referência, tem a vantagem de que a imagem resultante mostra somente pessoas, i.e., outros objetos que se movem são excluídos. Outra vantagem é que essa técnica evita buracos em regiões da pessoa que possuem a mesma cor que a imagem do fundo. 
+
+Qualquer um dos três métodos acima será considerado para a nota, porém o método 3 certamente é o mais interessante do ponto de vista desta disciplina.
+
+Duas coisas são necessárias para que seu trabalho valha bônus na nota:
+
+    Seu programa (bem documentado) deve ser enviado por aqui até o horário definido abaixo. 
+    Você deve apresentá-lo funcionando, ao vivo, no horário da primeira aula que houver após a data/hora definida abaixo. Sua demonstração deve ser feitas compartilhando a tela do seu PC, usando sua câmera. Caso tenha dificuldades com a Internet no horário da aula, será proposta uma alternativa ao final das apresentações realizadas na aula.
+
+Atenção: há um limite de 5MB para entregas nesta atividade.
