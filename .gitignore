@@ -1,0 +1,6 @@
+# Virtual Environments
+.desafio1/
+
+# Automatically created cache files
+__pycache__
+*pyc
