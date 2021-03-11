@@ -5,11 +5,9 @@ from virtual_background import background_subtraction, contour_detection, face_d
 
 
 def main(processing_method):
-    webcam = cv2.VideoCapture(0)
+    webcam = cv2.imread('../resources/câmera_1.png', cv2.IMREAD_COLOR)
 
     background_img = get_background_image(webcam)
-
-    _, fst_frame = webcam.read()
 
     while True:
         if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -17,7 +15,7 @@ def main(processing_method):
 
         _, cur_frame = webcam.read()
 
-        mask = processing_method(cur_frame, fst_frame)
+        mask = processing_method(cur_frame)
 
         masked_frame = cv2.bitwise_and(cur_frame, cur_frame, mask=mask)
         indexes = np.where(masked_frame == 0)

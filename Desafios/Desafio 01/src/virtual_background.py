@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from utils import get_contours
 
 
 def background_subtraction(cur_frame, fst_frame):
@@ -38,3 +39,16 @@ def face_detection(cur_frame, _):
 
     return mask
 
+def contour_detection(cur_frame, _):
+    contour_frame = cv2.cvtColor(cur_frame, cv2.COLOR_BGR2GRAY)
+    canny_val = np.mean(contour_frame) * 1.2
+
+    contour_frame = cv2.GaussianBlur(contour_frame, (5, 5), 1)
+    contour_frame = cv2.Canny(contour_frame, canny_val, canny_val)
+
+    kernel = np.ones((5,5))
+    contour_frame = cv2.dilate(contour_frame, kernel, iterations=5)
+    contour_frame = cv2.erode(contour_frame, kernel, iterations=4)
+
+    contour_frame = get_contours(contour_frame)
+    return contour_frame

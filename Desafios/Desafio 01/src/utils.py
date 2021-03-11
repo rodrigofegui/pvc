@@ -42,10 +42,35 @@ def get_background_image(webcam):
 
     image = cv2.imdecode(
         np.frombuffer(
-            get(f'https://loremflickr.com/{width}/{height}/star-trek').content,
+            get(f'https://loremflickr.com/{width}/{height}/star-trek,spock').content,
             np.uint8
         ),
         cv2.IMREAD_COLOR
     )
 
     return image
+
+
+def get_contours(img):
+    ret_img = np.zeros_like(img)
+    contours, _ = cv2.findContours(img, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    biggest_area = 0
+    biggest_contour = None
+    x, y, w, h = 0, 0, 0, 0
+
+    for contour in contours:
+        area = cv2.contourArea(contour)
+
+        if area < 500:
+            continue
+
+        if area > biggest_area:
+            biggest_contour = contour
+
+            approx = cv2.approxPolyDP(contour, .03 * cv2.arcLength(contour, True), True)
+            x, y, w, h = cv2.boundingRect(approx)
+
+    cv2.drawContours(ret_img, biggest_contour, -1, (255, 255, 255), cv2.FILLED)
+    cv2.rectangle(ret_img, (x, y), (x + w, y + h), (128, 255, 255), 2)
+
+    return ret_img
