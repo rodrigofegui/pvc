@@ -1,5 +1,9 @@
 # Virtual Environments
 .desafio1/
+.desafio2/
+
+# Editor control
+.vscode
 
 # Automatically created cache files
 __pycache__
