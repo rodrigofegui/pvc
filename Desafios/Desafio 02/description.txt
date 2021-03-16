@@ -1,0 +1,27 @@
+Desafio 2: calibração de câmeras
+
+Regras:
+
+    Assim como no desafio anterior, entregas e apresentações realizadas com sucesso poderão dar um bônus de até 10% na nota do Projeto 1, i.e., se a nota do projeto for de 0 a 10, este bônus pode incrementar sua nota em 1 ponto (com o teto de 10, sem propagar bônus para o Projeto 2).
+
+    Porém, somente os alunos que não participaram do primeiro desafio terão direito a esse bônus, e somente eles serão convidados a apresentar seus resultados durante a aula.
+
+    Mesmo assim, todos são encorajados a trabalhar nessa implementação, pois ela será necessária para implementar o Projeto 1.
+
+Enunciado:
+
+    Escreva um programa capaz de efetuar a calibração de sua web-camera. Pode usar todos os recursos da OpenCV, mas é importante que a calibração seja completa, i.e., seu programa deve gerar a matrix de projeção P e também sua decomposição:
+
+        matriz de intrínsecos K,
+        matriz de Rotação ou os 3 ângulos de rotação e
+        vetor de translação.
+        Além disso, seu programa deve produzir os parâmetros de distorção radial.
+
+    Recomendo que seja usado um padrão de calibração como um tabuleiro de xadrez/damas. Quem não tiver um tabuleiro em casa pode imprimi-lo numa folha de papel ou tentar desenhar e pintar um.
+
+    Peço que o método seja demonstrado ao vivo, no início da nossa aula, usando sua própria webcam e compartilhando sua tela via MS-Teams durante a execução do programa.
+
+Observação: assim como no desafio anterior, duas coisas são necessárias para que seu trabalho valha bônus na nota:
+
+    Seu programa (bem documentado) deve ser enviado por aqui até o horário definido abaixo.
+    Você deve apresentá-lo funcionando, ao vivo, no horário da primeira aula que houver após a data/hora definida abaixo. Sua demonstração deve ser feitas compartilhando a tela do seu PC, usando sua câmera. Caso tenha dificuldades com a Internet no horário da aula, será proposta uma alternativa ao final das apresentações realizadas na aula.

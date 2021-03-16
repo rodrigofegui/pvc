@@ -1,6 +1,8 @@
-import numpy as np
-import cv2 as cv
 from glob import glob
+from random import randint
+
+import cv2 as cv
+import numpy as np
 
 
 def get_real_and_img_pts(
@@ -19,7 +21,7 @@ def get_real_and_img_pts(
     - `show_progress:bool`: Control the image exhibition as they been process
 
     Returns:
-    - (`real_pts`, `img_pts`, `img_gray.shape`)
+    - (`real_pts`, `img_pts`, `img_gray.shape`, `img_names`)
     """
     # termination criteria
     criteria = (cv.TERM_CRITERIA_EPS + cv.TERM_CRITERIA_MAX_ITER, 30, .0001)
@@ -34,7 +36,8 @@ def get_real_and_img_pts(
     real_pts, img_pts = [], []
     img_gray = np.zeros((1, 1))
 
-    for img_name in glob(img_name_pattern):
+    img_names = glob(img_name_pattern)
+    for img_name in img_names:
         img = cv.imread(img_name)
         img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
@@ -58,11 +61,13 @@ def get_real_and_img_pts(
 
     cv.destroyAllWindows()
 
-    return real_pts, img_pts, img_gray.shape
+    return real_pts, img_pts, img_gray.shape, img_names
 
 
 def get_camera_matrices(real_pts: list, img_pts: list, img_shape: tuple) -> tuple:
-    """Get general camera matrices: intrinsic params and distortion coefficients.
+    """Get general camera matrices: intrinsic params and distortion coefficients; and
+    specific camera matrices: rotation, translation and projection.
+
     Source: https://docs.opencv.org/master/dc/dbb/tutorial_py_calibration.html
 
     Args:
@@ -71,10 +76,27 @@ def get_camera_matrices(real_pts: list, img_pts: list, img_shape: tuple) -> tupl
     - `img_shape:tuple`: Used images' shape
 
     Returns:
-    - (`intrinsics`, `distortion`)
+    - Matrices in dict
     """
     _, intrinsics, distortion, rot_vecs, trans_vecs = cv.calibrateCamera(
         real_pts, img_pts, img_shape[::-1], None, None
     )
 
-    return intrinsics, distortion
+    pos = randint(0, len(rot_vecs) - 1)
+    rotation, _ = cv.Rodrigues(rot_vecs[pos])
+    translation = trans_vecs[pos]
+
+    extrinsic = cv.hconcat((rotation, translation))
+    projection = np.matmul(intrinsics, extrinsic)
+
+    return {
+        'intrinsics': intrinsics,
+        'distortion': distortion,
+        'specific': {
+            'sorted': pos,
+            'rotation': rotation,
+            'translation': translation,
+            'extrinsic': extrinsic,
+            'projection': projection
+        }
+    }
