@@ -1,0 +1,22 @@
+Desafio 3: medição de um objeto ou de uma distância
+
+Regras:
+
+Assim como no desafio anterior, entregas e apresentações realizadas com sucesso poderão dar um bônus de até 10% na nota do Projeto 1, i.e., se a nota do projeto for de 0 a 10, este bônus pode incrementar sua nota em 1 ponto (com o teto de 10, sem propagar bônus para o Projeto 2).
+
+Este bônus pode se acumular com o bônus do primeiro ou do segundo desafio, ou seja, alunos que participaram dos desafios anteriores também se beneficiarão ao apresentar implementações para esta tarefa.
+
+
+Enunciado:
+
+Escreva um programa capaz de usar sua câmera como um dispositivo de medição para realizar uma das tarefas abaixo:
+
+    Dado um objeto que está a uma distância pré definida (por exemplo, medida com uma trena), use cliques do mouse para medir o tamanho real do objeto, por exemplo, meça a sua mão (distância entre o pulso e a ponta do dedo do meio) sabendo-se que ela se encontra a 40 cm da câmera.
+    Dado um objeto do qual é sabida sua medida, use-o para dizer qual a distância ele se encontra da câmera. Por exemplo, sabendo que uma pessoa mede 1.78 m de altura, use um cliques no pé e no alto da cabeça para saber a que distância ela se encontra da câmera.
+
+Compare as medições obtidas pelo seu método com a medição real dele obtida usando uma régua ou uma trena.
+
+Observação: assim como nos desafios anteriores, duas coisas são necessárias para que seu trabalho valha bônus na nota:
+
+    Seu programa (bem documentado) deve ser enviado por aqui até o horário definido abaixo.
+    Você deve apresentá-lo funcionando, ao vivo, no horário da primeira aula que houver após a data/hora definida abaixo. Sua demonstração deve ser feita compartilhando a tela do seu PC, usando sua câmera. Caso tenha dificuldades com a Internet no horário da aula, será proposta uma alternativa ao final das apresentações realizadas na aula.
