@@ -3,9 +3,19 @@
 .desafio02/
 .desafio3/
 
+.proj1/
+
+
 # Editor control
 .vscode
+
 
 # Automatically created cache files
 __pycache__
 *pyc
+
+
+# Heavy dir
+ignore_*/
+data/
+results/

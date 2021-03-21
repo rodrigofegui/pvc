@@ -89,6 +89,8 @@ while True:
     if resp:
         cv.rectangle(cur_frame, (0, cur_frame.shape[0] - 50), (200, cur_frame.shape[0]), (77, 0, 38), cv.FILLED)
         cv.putText(cur_frame, resp, (5, cur_frame.shape[0] - 20), FONT, .7, (115, 249, 255), 1, cv.LINE_AA)
+    
+    print('shape', cur_frame.shape)
 
     cv.imshow(WEBCAM_WIN_NAME, cur_frame)
 
