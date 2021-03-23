@@ -1,5 +1,6 @@
 import cv2 as cv
 from datetime import datetime
+import numpy as np
 
 from utils.utils import get_disp_map, get_resize_shape, parse_calib_file
 from utils.variables import WORKDIRS, DISP_BLOCK_SEARCH, RESULT_DIR
@@ -20,10 +21,12 @@ for workdir in WORKDIRS:
     print('img_right', img_right.shape)
     print()
 
-    # disp_map = get_disp_map(img_left, img_right, use_default=True)
-    # cv.imwrite(f'{RESULT_DIR}/disp_{datetime.now().isoformat()}.png', disp_map)
-    disp_map = get_disp_map(img_left, img_right)
-    cv.imwrite(f'{RESULT_DIR}/disp_{datetime.now().isoformat()}.png', disp_map)
+    # disp_map = get_disp_map(img_left, img_right, version='default')
+    disp_map = get_disp_map(img_left, img_right, version='ajust_window')
+    disp_max = np.max(disp_map)
+    cv.imwrite(f'{RESULT_DIR}/disp_max_{disp_max}_{datetime.now().isoformat()}.png', disp_map)
+    disp_map = (disp_map / disp_max).astype(np.float32)
+    cv.imwrite(f'{RESULT_DIR}/disp_maxn_{disp_max}_{datetime.now().isoformat()}.png', disp_map)
 
 print('\nEnding: Challenge 1')
 print('-' * 50)

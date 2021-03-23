@@ -1,9 +1,10 @@
-from datetime import datetime
+from os import cpu_count
+from threading import Thread
 
 import cv2 as cv
 import numpy as np
 
-from .variables import DISP_BLOCK_SEARCH, DISP_FILTER_RATIO, IMG_LOWEST_DIMENSION, MIN_DISP_FILTER_SZ, RESULT_DIR
+from .variables import DISP_BLOCK_SEARCH, DISP_FILTER_RATIO, IMG_LOWEST_DIMENSION, MIN_DISP_FILTER_SZ
 
 
 def parse_calib_file(file_name):
@@ -34,79 +35,94 @@ def get_resize_shape(original_shape: tuple) -> tuple:
 
     return IMG_LOWEST_DIMENSION, int((IMG_LOWEST_DIMENSION * original_shape[0]) / original_shape[1])
 
-def get_disp_map(img_left:np.ndarray, img_right:np.ndarray, use_default: bool = False) -> np.ndarray:
-    img_left = cv.cvtColor(img_left, cv.COLOR_BGR2GRAY).astype(np.int32)
-    img_right = cv.cvtColor(img_right, cv.COLOR_BGR2GRAY).astype(np.int32)
+# def get_disp_map(img_left:np.ndarray, img_right:np.ndarray, use_default: bool = False) -> np.ndarray:
+def get_disp_map(img_left:np.ndarray, img_right:np.ndarray, version:str = 'ajust_window') -> np.ndarray:
+    """version = 'default' | 'ajust_window' """
+    valid_versions = ['default', 'ajust_window']
 
-    if use_default:
-        return cv.StereoBM_create(
-            numDisparities=DISP_BLOCK_SEARCH,
-            blockSize=5
-        ).compute(img_left, img_right)
+    if version not in valid_versions:
+        return np.zeros((*img_left.shape[:-1], 1))
 
-    # filter_sz = int(max(MIN_DISP_FILTER_SZ, min(*img_left.shape) / DISP_FILTER_RATIO))
-    # padding = filter_sz // 2
-    # padding += 0 if padding % 2 == 0 else 1
-    filter_sz = None
-    padding = 1
-    print('filter', filter_sz, padding)
+    img_left = cv.cvtColor(img_left, cv.COLOR_BGR2GRAY)
+    img_right = cv.cvtColor(img_right, cv.COLOR_BGR2GRAY)
 
-    disp_map = np.zeros_like(img_left)
-    matched = np.zeros_like(img_left)
+    filter_sz = int(max(MIN_DISP_FILTER_SZ, min(*img_left.shape) / DISP_FILTER_RATIO))
+    print(f'filter: {filter_sz}')
 
-    for y in range(img_left.shape[0]):
-    # for unpadding_y, y in enumerate(range(50, img_left.shape[0] - padding)):
-        print(f'linha: {y}')
-        for x_l in range(img_left.shape[1] - 1, -1, -1):
-            # print(f'coluna: {x_l}')
-            sum_match, x_match = float('inf'), x_l
-            # print(f'ref[{y}, {x}]:\n{ref}')
-
-            for x_r in range(np.argmax(matched[y]) or x_l, -1, -1):
-                x_min, y_min = max(0, x_r - padding), max(0, y - padding)
-                x_max, y_max = min(x_r + padding + 1, img_left.shape[1]), min(y + padding + 1, img_left.shape[0])
-
-                # Shape match ajustment
-                x_l_max = min(x_l + x_max - x_r, img_left.shape[1])
-                x_max = min(x_r + x_l_max - x_l, img_left.shape[1])
-
-                search = img_right[y_min:y_max, x_min:x_max]
-                ref = img_left[y_min:y_max, x_l + x_min - x_r:x_l_max]
-                try:
-                    diff = abs(ref - search)
-                    cmp_sum = np.sum(diff)
-                # print(f'\ndiff: {cmp_sum} {diff.shape}\n{diff}')
-                # print(f'search[{y}, {x}]:\n{search}')
-                # print(f'diff: {np.sum(diff)} || {match_sum}')
-                except:
-                    print(f'\nRIGHT [{y}, {x_r}]: x_min: {x_min} | x_max: {x_max} | y_min: {y_min} | y_max: {y_max}')
-                    print(f'LEFT [{y}, {x_l}]: x_min: {x_l + x_min - x_r} | x_max: {x_l_max} | y_min: {y_min} | y_max: {y_max}')
-                    print(f'ref[{y}, {x_l}]: {ref.shape}\n{ref}')
-                    print(f'search[{y}, {x_r}]: {search.shape}\n{search}')
-
-                    print(1/0)
-
-                if cmp_sum < sum_match:
-                    # print(f'\t{x_l} -> {x_r}')
-                    sum_match = cmp_sum
-                    x_match = x_r
-
-            # input('waiting...')
-
-            # print(f'\t{x_l} -> {x_match}')
-            disp_map[y, x_l] = (x_l - x_match) or 255
-            matched[y, x_match] = 1
-            # print()
-            # print(f'disp[{unpadding_y}, {unpadding_x}]: {disp_map[unpadding_y, unpadding_x]}\n')
-
-        # break
-        # if y >= 32:
-        #     break
-
-    return disp_map
+    return eval(f'_get_disp_map_{version}')(img_left, img_right, filter_sz)
 
 def _parse_intrinsic(raw_line):
     return [
         list(map(float, row.strip().split()))
         for row in raw_line.replace('[', '').replace(']', '').split(';')
     ]
+
+def _get_disp_map_default(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
+    return cv.StereoBM_create(
+        # numDisparities=img_left.shape[1] - (img_left.shape[1] % 16),
+        numDisparities=DISP_BLOCK_SEARCH,
+        blockSize=block_sz
+    ).compute(img_left, img_right)
+
+def _get_disp_map_ajust_window(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
+    img_left, img_right = img_left.astype(np.int32), img_right.astype(np.int32)
+
+    disp_map = np.zeros_like(img_left)
+
+    thread_points = list(range(0, img_left.shape[0] + 1, int(img_left.shape[0] / cpu_count())))
+    thread_ranges = [(val, thread_points[ind +1]) for ind, val in enumerate(thread_points[:-1])]
+
+    threads = []
+    for rng in thread_ranges:
+        t = Thread(
+            target=_get_disp_map_ajust_window_esp,
+            args=(img_left, img_right, block_sz, rng, disp_map)
+        )
+        threads.append(t)
+        t.start()
+
+    for t in threads:
+        t.join()
+
+    return disp_map
+
+def _get_disp_map_ajust_window_esp(
+    img_left:np.ndarray, img_right:np.ndarray,
+    block_sz:int = MIN_DISP_FILTER_SZ, y_range: tuple = (0, 0),
+    result: np.ndarray = None
+) -> np.ndarray:
+    block_sz = int(block_sz / 2)
+    matched = np.zeros((y_range[1], img_left.shape[1]))
+
+    for ind, y in enumerate(range(*y_range)):
+        print(f'linha: {y}')
+        for x_l in range(img_left.shape[1] - 1, -1, -1):
+            sum_match, x_match = float('inf'), x_l
+
+            for x_r in range(np.argmax(matched[y]) or x_l, -1, -1):
+                try:
+                    x_min, y_min = max(0, x_r - block_sz), max(0, y - block_sz)
+                    x_max, y_max = min(x_r + block_sz + 1, img_left.shape[1]), min(y + block_sz + 1, img_left.shape[0])
+
+                    # Shape match ajustment
+                    x_l_max = min(x_l + x_max - x_r, img_left.shape[1])
+                    x_max = min(x_r + x_l_max - x_l, img_left.shape[1])
+
+                    search = img_right[y_min:y_max, x_min:x_max]
+                    ref = img_left[y_min:y_max, x_l + x_min - x_r:x_l_max]
+                    diff = abs(ref - search)
+                    cmp_sum = np.sum(diff)
+                except:
+                    print(f'\nRIGHT [{y}, {x_r}]: x_min: {x_min} | x_max: {x_max} | y_min: {y_min} | y_max: {y_max}')
+                    print(f'LEFT [{y}, {x_l}]: x_min: {x_l + x_min - x_r} | x_max: {x_l_max} | y_min: {y_min} | y_max: {y_max}')
+                    print(f'ref[{y}, {x_l}]: {ref.shape}\n{ref}')
+                    print(f'search[{y}, {x_r}]: {search.shape}\n{search}')
+
+                if cmp_sum < sum_match:
+                    sum_match = cmp_sum
+                    x_match = x_r
+
+            result[y, x_l] = (x_l - x_match) or 255
+            matched[y, x_match] = 1
+
+    return result
