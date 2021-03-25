@@ -123,9 +123,9 @@ def _get_disp_map_ajust_window(img_left:np.ndarray, img_right:np.ndarray, block_
     return disp_map
 
 def _get_disp_map_x_correlation(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
-    padding = int(block_sz / 2)
-
     disp_map = np.zeros_like(img_left)
+
+    padding = int(block_sz / 2)
 
     img_left = np.pad(
         img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
@@ -135,34 +135,17 @@ def _get_disp_map_x_correlation(img_left:np.ndarray, img_right:np.ndarray, block
     ).astype(np.int32)
 
     for unpadded_y, y in enumerate(range(padding, img_left.shape[0] - padding)):
-        print(f'linha: {y}')
-        matched_already = np.zeros(img_left.shape[1])
+        print(f'linha: {unpadded_y}')
 
-        for unpadded_x, x_l in enumerate(range(img_left.shape[1] - padding - 1, padding - 1, -1)):
-            print(f'\tcoluna: {x_l}')
-            # ref = img_left[y, x_l - padding:x_l + padding + 1]
-            # norm_ref = np.linalg.norm(ref)
+        for unpadded_x, x_l in enumerate(range(padding, img_left.shape[1] - padding - 1)):
+            ref = img_left[y, x_l:min(x_l + block_sz if x_l > block_sz else x_l + 1, img_left.shape[1])]
 
-            # original_x_correlation = np.sum(np.dot(ref, ref)) / (norm_ref ** 2)
-            # correlation_match, x_match = float('inf'), x_l
+            search = rolling_window(img_right[y, :x_l or 1], ref.size)
+            x_correlation = np.dot(search, ref) / (np.linalg.norm(search, axis=1) * np.linalg.norm(ref))
 
-            # for x_r in range(x_l, padding - 1, -1):
-            #     # if matched_already[x_r]:
-            #     #     continue
-            #     search = img_right[y, x_r - padding:x_r + padding + 1]
+            x_match = x_correlation.argmax()
 
-            #     c_x_correlation = np.sum(np.dot(ref, search))
-            #     c_x_correlation /= norm_ref * np.linalg.norm(search)
-
-            #     diff_x_correlation = (original_x_correlation - c_x_correlation) ** 2
-
-            #     if diff_x_correlation < correlation_match:
-            #         correlation_match = diff_x_correlation
-            #         x_match = x_r
-
-
-            # disp_map[unpadded_y, unpadded_x] = (x_l - x_match) or 255
-            # matched_already[x_match] = 1
+            disp_map[unpadded_y, unpadded_x] = x_l - x_match
 
     return disp_map
 
