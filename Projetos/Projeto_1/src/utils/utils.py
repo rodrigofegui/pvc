@@ -13,6 +13,7 @@ def rolling_window(a, size):
 
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
+# https://colab.research.google.com/drive/1Zru_-zzbtylgitbwxbi0eDBNhwr8qYl6#scrollTo=R7GoWaxG2RpX
 def roll_2D(a,      # ND array
          b,      # rolling 2D window array
          dx=1,   # horizontal step, abscissa, number of columns
@@ -91,67 +92,35 @@ def _get_disp_map_default(img_left:np.ndarray, img_right:np.ndarray, block_sz:in
     ).compute(img_left, img_right)
 
 def _get_disp_map_ajust_window(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
-    img_left, img_right = img_left.astype(np.int32), img_right.astype(np.int32)
-
     disp_map = np.zeros_like(img_left)
-
-    thread_points = list(range(0, img_left.shape[0] + 1, int(img_left.shape[0] / cpu_count())))
-    thread_ranges = [(val, thread_points[ind +1]) for ind, val in enumerate(thread_points[:-1])]
-
-    threads = []
-    for rng in thread_ranges:
-        t = Thread(
-            target=_get_disp_map_ajust_window_esp,
-            args=(img_left, img_right, block_sz, rng, disp_map)
-        )
-        threads.append(t)
-        t.start()
-
-    for t in threads:
-        t.join()
-
-    return disp_map
-
-def _get_disp_map_ajust_window_esp(
-    img_left:np.ndarray, img_right:np.ndarray,
-    block_sz:int = MIN_DISP_FILTER_SZ, y_range: tuple = (0, 0),
-    result: np.ndarray = None
-) -> np.ndarray:
     block_sz = int(block_sz / 2)
-    matched = np.zeros((y_range[1], img_left.shape[1]))
+    # matched = np.zeros((y_range[1], img_left.shape[1]))
 
-    for ind, y in enumerate(range(*y_range)):
+    for y in range(img_left.shape[0]):
         print(f'linha: {y}')
         for x_l in range(img_left.shape[1] - 1, -1, -1):
-            sum_match, x_match = float('inf'), x_l
+            y_min, y_max = max(0, y - block_sz), min(y + block_sz + 1, img_left.shape[0])
+            x_min, x_max = max(0, x_l - block_sz), min(x_l + block_sz + 1, img_left.shape[1])
 
-            for x_r in range(np.argmax(matched[y]) or x_l, -1, -1):
-                try:
-                    x_min, y_min = max(0, x_r - block_sz), max(0, y - block_sz)
-                    x_max, y_max = min(x_r + block_sz + 1, img_left.shape[1]), min(y + block_sz + 1, img_left.shape[0])
+            x_match = x_l
 
-                    # Shape match ajustment
-                    x_l_max = min(x_l + x_max - x_r, img_left.shape[1])
-                    x_max = min(x_r + x_l_max - x_l, img_left.shape[1])
+            ref = img_left[y_min:y_max, x_min:x_max]
 
-                    search = img_right[y_min:y_max, x_min:x_max]
-                    ref = img_left[y_min:y_max, x_l + x_min - x_r:x_l_max]
-                    diff = abs(ref - search)
-                    cmp_sum = np.sum(diff)
-                except:
-                    print(f'\nRIGHT [{y}, {x_r}]: x_min: {x_min} | x_max: {x_max} | y_min: {y_min} | y_max: {y_max}')
-                    print(f'LEFT [{y}, {x_l}]: x_min: {x_l + x_min - x_r} | x_max: {x_l_max} | y_min: {y_min} | y_max: {y_max}')
-                    print(f'ref[{y}, {x_l}]: {ref.shape}\n{ref}')
-                    print(f'search[{y}, {x_r}]: {search.shape}\n{search}')
+            try:
+                search = roll_2D(img_right[y:y + ref.shape[0], :x_max], ref)
 
-                if cmp_sum < sum_match:
-                    sum_match = cmp_sum
-                    x_match = x_r
+                # print(f'\tsearch: {search.size}')
+                if search.size:
+                    search = search[0] - ref
+                    x_match = int(closest_idx(search, 0) / ref.size)
+            except Exception as e:
+                print('error', e)
+            finally:
+                disp_map[y, x_l] = (x_l - x_match) or 255
+        # if y >= 150:
+        #     break
 
-            result[y, x_l] = (x_l - x_match) or 255
-            matched[y, x_match] = 1
-
-    return result
+    return disp_map
 
 def _get_disp_map_x_correlation(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
     padding = int(block_sz / 2)
