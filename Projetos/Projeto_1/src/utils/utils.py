@@ -7,6 +7,32 @@ import numpy as np
 from .variables import DISP_BLOCK_SEARCH, DISP_FILTER_RATIO, IMG_LOWEST_DIMENSION, MIN_DISP_FILTER_SZ
 
 
+def rolling_window(a, size):
+    shape = a.shape[:-1] + (a.shape[-1] - size + 1, size)
+    strides = a.strides + (a. strides[-1],)
+
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+def roll_2D(a,      # ND array
+         b,      # rolling 2D window array
+         dx=1,   # horizontal step, abscissa, number of columns
+         dy=1):  # vertical step, ordinate, number of rows
+    shape = a.shape[:-2] + \
+            ((a.shape[-2] - b.shape[-2]) // dy + 1,) + \
+            ((a.shape[-1] - b.shape[-1]) // dx + 1,) + \
+            b.shape  # sausage-like shape with 2D cross-section
+    strides = a.strides[:-2] + \
+              (a.strides[-2] * dy,) + \
+              (a.strides[-1] * dx,) + \
+              a.strides[-2:]
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+def closest_idx(array, value):
+    array = np.asarray(array)
+
+    return np.argmin(np.abs(array - value), axis=None)
+
+
 def parse_calib_file(file_name):
     with open(file_name, encoding='UTF-8') as file:
         lines = file.readlines()
@@ -38,7 +64,7 @@ def get_resize_shape(original_shape: tuple) -> tuple:
 # def get_disp_map(img_left:np.ndarray, img_right:np.ndarray, use_default: bool = False) -> np.ndarray:
 def get_disp_map(img_left:np.ndarray, img_right:np.ndarray, version:str = 'ajust_window') -> np.ndarray:
     """version = 'default' | 'ajust_window' """
-    valid_versions = ['default', 'ajust_window']
+    valid_versions = ['default', 'ajust_window', 'x_correlation', 'linear_search']
 
     if version not in valid_versions:
         return np.zeros((*img_left.shape[:-1], 1))
@@ -126,3 +152,66 @@ def _get_disp_map_ajust_window_esp(
             matched[y, x_match] = 1
 
     return result
+
+def _get_disp_map_x_correlation(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
+    padding = int(block_sz / 2)
+
+    disp_map = np.zeros_like(img_left)
+
+    img_left = np.pad(
+        img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
+    ).astype(np.int32)
+    img_right = np.pad(
+        img_right, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
+    ).astype(np.int32)
+
+    for unpadded_y, y in enumerate(range(padding, img_left.shape[0] - padding)):
+        print(f'linha: {y}')
+        matched_already = np.zeros(img_left.shape[1])
+
+        for unpadded_x, x_l in enumerate(range(img_left.shape[1] - padding - 1, padding - 1, -1)):
+            print(f'\tcoluna: {x_l}')
+            # ref = img_left[y, x_l - padding:x_l + padding + 1]
+            # norm_ref = np.linalg.norm(ref)
+
+            # original_x_correlation = np.sum(np.dot(ref, ref)) / (norm_ref ** 2)
+            # correlation_match, x_match = float('inf'), x_l
+
+            # for x_r in range(x_l, padding - 1, -1):
+            #     # if matched_already[x_r]:
+            #     #     continue
+            #     search = img_right[y, x_r - padding:x_r + padding + 1]
+
+            #     c_x_correlation = np.sum(np.dot(ref, search))
+            #     c_x_correlation /= norm_ref * np.linalg.norm(search)
+
+            #     diff_x_correlation = (original_x_correlation - c_x_correlation) ** 2
+
+            #     if diff_x_correlation < correlation_match:
+            #         correlation_match = diff_x_correlation
+            #         x_match = x_r
+
+
+            # disp_map[unpadded_y, unpadded_x] = (x_l - x_match) or 255
+            # matched_already[x_match] = 1
+
+    return disp_map
+
+def _get_disp_map_linear_search(img_left:np.ndarray, img_right:np.ndarray, block_sz:int = MIN_DISP_FILTER_SZ) -> np.ndarray:
+    disp_map = np.zeros_like(img_left)
+
+    for y in range(img_left.shape[0]):
+        print(f'linha: {y}')
+        for x in range(img_left.shape[1]):
+            ref = img_left[y, x:min(x + block_sz if x > block_sz else x + 1, img_left.shape[1])]
+            search = img_right[y, :x or 1]
+            # print(f'ref: {ref.shape}\n{ref}')
+            # print(f'search: {search.shape}\n{search}')
+
+            search = rolling_window(search, ref.size) - ref
+
+            x_match = int(closest_idx(search, 0) / ref.size)
+
+            disp_map[y,x] = (x - x_match) or 255
+
+    return disp_map

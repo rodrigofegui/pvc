@@ -22,7 +22,9 @@ for workdir in WORKDIRS:
     print()
 
     # disp_map = get_disp_map(img_left, img_right, version='default')
-    disp_map = get_disp_map(img_left, img_right, version='ajust_window')
+    # disp_map = get_disp_map(img_left, img_right, version='ajust_window')
+    # disp_map = get_disp_map(img_left, img_right, version='x_correlation')
+    disp_map = get_disp_map(img_left, img_right, version='linear_search')
     disp_max = np.max(disp_map)
     cv.imwrite(f'{RESULT_DIR}/disp_max_{disp_max}_{datetime.now().isoformat()}.png', disp_map)
     disp_map = (disp_map / disp_max).astype(np.float32)
