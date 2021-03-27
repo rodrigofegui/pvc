@@ -1,5 +1,6 @@
 WORKDIRS = [
-    '../data/Middlebury/Jadeplant-perfect'
+    '../data/Middlebury/Jadeplant-perfect',
+    '../data/Middlebury/Playtable-perfect'
 ]
 
 RESULT_DIR = '../results'

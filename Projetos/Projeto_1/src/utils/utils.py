@@ -23,6 +23,9 @@ def rolling_window_2D(a,      # ND array
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 def closest_idx(array, value):
+    if not array.size:
+        return -1
+
     array = np.asarray(array)
 
     return np.argmin(np.abs(array - value), axis=None)

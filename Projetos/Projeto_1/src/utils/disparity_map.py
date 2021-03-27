@@ -2,7 +2,7 @@ import cv2 as cv
 import numpy as np
 
 from .utils import closest_idx, rolling_window, rolling_window_2D
-from .variables import ACCEPT_DIFF, DISP_BLOCK_SEARCH, MIN_DISP_FILTER_SZ
+from .variables import DISP_BLOCK_SEARCH, MIN_DISP_FILTER_SZ
 
 
 def basic_disp_map(
@@ -46,28 +46,37 @@ def windowing_disp_map(
     - Disparity map
     """
     disp_map = np.zeros_like(img_left)
-    block_sz = int(block_sz / 2)
+    padding = int(block_sz / 2)
 
-    for y in range(img_left.shape[0]):
-        print(f'linha: {y}', end='\r')
-        for x_l in range(img_left.shape[1]):
-            y_min, y_max = max(0, y - block_sz), min(y + block_sz + 1, img_left.shape[0])
-            x_min, x_max = max(0, x_l - block_sz), min(x_l + block_sz + 1, img_left.shape[1])
+    img_left = np.pad(
+        img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
+    ).astype(np.int32)
+    img_right = np.pad(
+        img_right, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
+    ).astype(np.int32)
 
-            x_match = x_l
+    for unpadded_y, y in enumerate(range(padding, img_left.shape[0] - padding)):
+        print(f'linha: {unpadded_y}', end='\r')
 
-            ref = img_left[y_min:y_max, x_min:x_max]
+        for unpadded_x, x_l in enumerate(range(padding, img_left.shape[1] - padding)):
+            y_min, y_max = max(0, y - padding), min(y + padding + 1, img_left.shape[0])
+            x_l_min, x_l_max = max(0, x_l - padding), min(x_l + padding + 1, img_left.shape[1])
+            x_r_min = max(0, x_l - lookup_size)
 
-            try:
-                search = rolling_window_2D(img_right[y:y + ref.shape[0], :x_max], ref)
+            ref = img_left[y_min:y_max, x_l_min:x_l_max]
 
-                if search.size:
-                    search = search[0] - ref
-                    x_match = int(closest_idx(search, 0) / ref.size)
-            except Exception as e:
-                print('error', e)
-            finally:
-                disp_map[y, x_l] = x_l - x_match
+            search = img_right[y_min:y_max, x_r_min:x_l_max]
+            search = (rolling_window_2D(search, ref).astype(np.int32))[0] - ref
+
+            x_match = int(closest_idx(search, 0))
+
+            if x_match == -1:
+                disp_map[unpadded_y, unpadded_x] = -1
+                continue
+
+            x_match += padding
+
+            disp_map[unpadded_y, unpadded_x] = x_l - x_match if x_match <= x_l else -1
 
     return disp_map
 
@@ -110,31 +119,19 @@ def x_correlation_disp_map(
             ref = img_left[y, x_l:x_max]
             search = img_right[y, x_min:x_max]
 
-            # print(f'ref: {ref.shape}\n{ref}')
-
-            # print(f'search: {search.shape}\n{search}')
             search = rolling_window(search, ref.size)
             x_correlation = np.dot(search, ref) / (np.linalg.norm(search, axis=1) * np.linalg.norm(ref))
             x_correlation = np.round(x_correlation, decimals=4)
 
-            # print(f'x_correlation: {x_correlation.shape}\n{x_correlation}')
             x_match = closest_idx(x_correlation, 1)
 
             if x_match == -1:
-                disp_map[unpadded_y, x_l] = -1
+                disp_map[unpadded_y, unpadded_x] = -1
                 continue
 
             x_match += x_min
 
-            # print(f'\tx: {x_l} | x_min: {x_min} | x_r: {x_match}')
             disp_map[unpadded_y, unpadded_x] = x_l - x_match if x_match <= x_l else -1
-
-        #     print()
-
-        #     if unpadded_x >= block_sz + 1:
-        #         break
-
-        # break
 
     return disp_map
 
@@ -162,10 +159,12 @@ def linear_search_disp_map(
         print(f'linha: {y}', end='\r')
         for cnt, x_l in enumerate(range(img_left.shape[1] - 1, -1, -1)):
             x_min = max(0, x_l - lookup_size)
+            x_l_max = min(x_l + block_sz if x_l > block_sz else x_l + 1, img_left.shape[1])
+            x_r_max = min(x_l + block_sz - 1, img_left.shape[1])
 
-            ref = img_left[y, x_l:min(x_l + block_sz if x_l > block_sz else x_l + 1, img_left.shape[1])]
+            ref = img_left[y, x_l:x_l_max]
 
-            search = rolling_window(img_right[y, x_min:x_l + block_sz - 1], ref.size).astype(np.int32) - ref
+            search = rolling_window(img_right[y, x_min:x_r_max], ref.size).astype(np.int32) - ref
 
             x_match = int(closest_idx(search, 0) / ref.size)
 
