@@ -1,3 +1,4 @@
+import cv2 as cv
 import numpy as np
 
 
@@ -59,6 +60,60 @@ def get_resize_shape(original_shape: tuple) -> tuple:
         return int((IMG_LOWEST_DIMENSION * original_shape[1]) / original_shape[0]), IMG_LOWEST_DIMENSION
 
     return IMG_LOWEST_DIMENSION, int((IMG_LOWEST_DIMENSION * original_shape[0]) / original_shape[1])
+
+def normalize_map(target: np.ndarray) -> tuple:
+    target_max = np.max(target)
+
+    if target_max == float('inf'):
+        target_max = target.flatten()
+        target_max.sort()
+        target_max = target_max[target_max != float('inf')]
+        target_max = target_max[-1]
+
+    target = np.round(target * (254 / target_max), decimals=0).astype(np.int32)
+    target[target == float('inf')] = 255
+
+    return target, target_max
+
+def cmp_gaussian_blur(disp_map: np.ndarray, ground_truth: np.ndarray, base_file_name: str) -> None:
+    max_kernel, max_sigma = 0, 0
+    min_sum = float('inf')
+
+    for kernel in range(5, 17, 2):
+        for sigma in range(0, 15):
+            c_disp_map = cv.GaussianBlur(disp_map, (kernel, kernel), sigma)
+            c_disp_map, _ = normalize_map(c_disp_map)
+
+            c_sum = np.sum(np.abs(c_disp_map - ground_truth))
+
+            if c_sum < min_sum:
+                min_sum = c_sum
+                max_kernel = kernel
+                max_sigma = sigma
+
+    c_disp_map = cv.GaussianBlur(disp_map, (max_kernel, max_kernel), max_sigma)
+    cv.imwrite(f'{base_file_name}_gau_k{max_kernel}_sg{sigma}_sm{min_sum}.png', c_disp_map)
+
+def cmp_median_blur(ground_truth: np.ndarray, file_names: list) -> None:
+    for disp_map_name in file_names:
+        print(f'comp {disp_map_name}')
+
+        disp_map = cv.imread(disp_map_name, cv.IMREAD_UNCHANGED)
+
+        min_sum, max_kernel = float('inf'), 0
+        for kernel in range(5, 17, 2):
+            c_disp_map = cv.medianBlur(disp_map, kernel)
+            c_disp_map, _ = normalize_map(disp_map)
+
+            c_sum = np.sum(np.abs(c_disp_map - ground_truth))
+
+            if c_sum < min_sum:
+                min_sum = c_sum
+                max_kernel = kernel
+
+        c_disp_map = cv.medianBlur(disp_map, max_kernel)
+        disp_map_name = disp_map_name[:-4] + f'_med_k{max_kernel}_sm{c_sum}.png'
+        cv.imwrite(disp_map_name, c_disp_map)
 
 def _parse_intrinsic(raw_line):
     return [

@@ -56,7 +56,7 @@ def windowing_disp_map(
     ).astype(np.int32)
 
     for unpadded_y, y in enumerate(range(padding, img_left.shape[0] - padding)):
-        print(f'linha: {unpadded_y}', end='\r')
+        # print(f'linha: {unpadded_y}', end='\r')
 
         for unpadded_x, x_l in enumerate(range(padding, img_left.shape[1] - padding)):
             y_min, y_max = max(0, y - padding), min(y + padding + 1, img_left.shape[0])
@@ -110,7 +110,7 @@ def x_correlation_disp_map(
     ).astype(np.int32)
 
     for unpadded_y, y in enumerate(range(padding, img_left.shape[0] - padding)):
-        print(f'linha: {unpadded_y}', end='\r')
+        # print(f'linha: {unpadded_y}', end='\r')
 
         for unpadded_x, x_l in enumerate(range(padding, img_left.shape[1] - padding - 1)):
             x_min = max(padding, x_l - lookup_size)
@@ -156,7 +156,7 @@ def linear_search_disp_map(
     disp_map = np.zeros_like(img_left)
 
     for y in range(img_left.shape[0]):
-        print(f'linha: {y}', end='\r')
+        # print(f'linha: {y}', end='\r')
         for cnt, x_l in enumerate(range(img_left.shape[1] - 1, -1, -1)):
             x_min = max(0, x_l - lookup_size)
             x_l_max = min(x_l + block_sz if x_l > block_sz else x_l + 1, img_left.shape[1])
