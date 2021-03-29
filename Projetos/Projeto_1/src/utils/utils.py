@@ -27,9 +27,9 @@ def closest_idx(array, value):
     if not array.size:
         return -1
 
-    array = np.asarray(array)
+    array = np.asarray(array)[::-1]
 
-    return np.argmin(np.abs(array - value), axis=None)
+    return len(array) - np.argmin(np.abs(array - value), axis=None) - 1
 
 def parse_calib_file(file_name):
     with open(file_name, encoding='UTF-8') as file:

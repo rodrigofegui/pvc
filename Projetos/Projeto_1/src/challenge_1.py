@@ -1,11 +1,12 @@
-from src.utils.utils import cmp_gaussian_blur, cmp_median_blur
+from glob import glob
+
 import cv2 as cv
 import numpy as np
-from utils.disparity_map import basic_disp_map, linear_search_disp_map, windowing_disp_map, x_correlation_disp_map
-from utils.utils import get_resize_shape, parse_calib_file, normalize_map
+from utils.depth_map import calc_depth_map, get_depth_map
+from utils.disparity_map import (basic_disp_map, judged_windowing_disp_map, linear_search_disp_map, windowing_disp_map,
+                                 x_correlation_disp_map)
+from utils.utils import cmp_gaussian_blur, cmp_median_blur, get_resize_shape, normalize_map, parse_calib_file
 from utils.variables import RESULT_DIR, WORKDIRS
-from utils.depth_map import get_depth_map
-from glob import glob
 
 print('Challenge 1: Disparities and deepness\n')
 
@@ -41,14 +42,15 @@ for workdir in WORKDIRS:
 
     methods = [
         # basic_disp_map,
-        # linear_search_disp_map,
-        # windowing_disp_map,
-        # x_correlation_disp_map,
+        linear_search_disp_map,
+        windowing_disp_map,
+        x_correlation_disp_map,
+        judged_windowing_disp_map
     ]
 
     for method in methods:
-        for block_sz in range(5, 17, 2):
-        # for block_sz in range(1, 3, 2):
+        # for block_sz in range(5, 17, 2):
+        for block_sz in range(1, 3, 2):
             print(f'method: {method.__name__} | block_sz: {block_sz}')
             disp_map = method(gray_left, gray_right, block_sz, lookup_size)
 
@@ -57,14 +59,11 @@ for workdir in WORKDIRS:
             file_name = f'{RESULT_DIR}/{method.__name__}_bl{block_sz}'
             cv.imwrite(f'{file_name}.png', disp_map)
 
-            cmp_gaussian_blur(disp_map, disp_map_gt, file_name)
+            # cmp_gaussian_blur(disp_map, disp_map_gt, file_name)
 
-            cmp_median_blur(disp_map_gt, f'{RESULT_DIR}/*.png')
+            # cmp_median_blur(disp_map_gt, f'{RESULT_DIR}/*.png')
 
-
-    # for disp_map_name in glob(f'{RESULT_DIR}/Jadeplant-perfect/disp_map/*_bl*.png'):
-    #     print(f'ajusting {disp_map_name}')
-
+    # calc_depth_map(calib, glob(f'{RESULT_DIR}/Jadeplant-perfect/disp_map/x_correlation_disp_map_bl15_med_k7_sm33658864.png'), f'{RESULT_DIR}')
     #     disp_map = cv.imread(disp_map_name, cv.IMREAD_UNCHANGED)
     #     depth_map = get_depth_map(calib, disp_map)
 
