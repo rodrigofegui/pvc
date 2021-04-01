@@ -1,5 +1,9 @@
 import cv2 as cv
 import numpy as np
+from pypfm import PFMLoader
+from netpbmfile import NetpbmFile
+from .variables import RESULT_DIR, ERROR_THRESHOLD
+import re
 
 
 def rolling_window(a, size):
@@ -29,7 +33,10 @@ def closest_idx(array, value):
 
     array = np.asarray(array)[::-1]
 
-    return len(array) - np.argmin(np.abs(array - value), axis=None) - 1
+    if len(array.shape) < 3:
+        return len(array) - np.argmin(np.abs(array - value), axis=None) - 1
+
+    return len(array) - np.argmin(np.sum(np.sum(np.abs(array - value), axis=1), axis=1)) - 1
 
 def parse_calib_file(file_name):
     with open(file_name, encoding='UTF-8') as file:
@@ -62,58 +69,105 @@ def get_resize_shape(original_shape: tuple) -> tuple:
     return IMG_LOWEST_DIMENSION, int((IMG_LOWEST_DIMENSION * original_shape[0]) / original_shape[1])
 
 def normalize_map(target: np.ndarray) -> tuple:
+    c_dtype = target.dtype
+
+    target = target.astype(np.float64)
+
     target_max = np.max(target)
 
     if target_max == float('inf'):
-        target_max = target.flatten()
-        target_max.sort()
-        target_max = target_max[target_max != float('inf')]
-        target_max = target_max[-1]
+        target[np.where(target == float('inf')) or np.where(target == float('-inf'))] = np.nan
+        target_max = np.nanmax(target)
 
-    target = np.round(target * (254 / target_max), decimals=0).astype(np.int32)
-    target[target == float('inf')] = 255
+    target[np.where(target != float('inf')) and np.where(target != float('-inf'))] *= (254 / target_max)
+    target[target == np.nan] = 255.
 
-    return target, target_max
+    target = np.round(target, decimals=0)
 
-def cmp_gaussian_blur(disp_map: np.ndarray, ground_truth: np.ndarray, base_file_name: str) -> None:
-    max_kernel, max_sigma = 0, 0
-    min_sum = float('inf')
+    return target.astype(c_dtype), target_max
+
+def cmp_gaussian_blur(disp_map: np.ndarray, ground_truth: np.ndarray, method_name, block_sz) -> None:
+    from .disparity_map import get_diff_percent
 
     for kernel in range(5, 17, 2):
         for sigma in range(0, 15):
+            # print(f'\tgaussian => kernel: {kernel} | sigma: {sigma}')
             c_disp_map = cv.GaussianBlur(disp_map, (kernel, kernel), sigma)
-            c_disp_map, _ = normalize_map(c_disp_map)
 
-            c_sum = np.sum(np.abs(c_disp_map - ground_truth))
+            errors = get_diff_percent(c_disp_map, ground_truth, ERROR_THRESHOLD)
+            # print(f'\t\terrors: {errors}')
 
-            if c_sum < min_sum:
-                min_sum = c_sum
-                max_kernel = kernel
-                max_sigma = sigma
+            with open(f'{RESULT_DIR}/method_comparison.csv', 'a') as out_file:
+                out_file.write(f'{method_name};{block_sz};{kernel};{sigma};{0};{errors}\n')
 
-    c_disp_map = cv.GaussianBlur(disp_map, (max_kernel, max_kernel), max_sigma)
-    cv.imwrite(f'{base_file_name}_gau_k{max_kernel}_sg{sigma}_sm{min_sum}.png', c_disp_map)
+def cmp_median_blur(disp_map: np.ndarray, ground_truth: np.ndarray, method_name, block_sz) -> None:
+    from .disparity_map import get_diff_percent
 
-def cmp_median_blur(ground_truth: np.ndarray, file_names: list) -> None:
-    for disp_map_name in file_names:
-        print(f'comp {disp_map_name}')
-
-        disp_map = cv.imread(disp_map_name, cv.IMREAD_UNCHANGED)
-
-        min_sum, max_kernel = float('inf'), 0
-        for kernel in range(5, 17, 2):
+    for kernel in range(5, 17, 2):
+        # print(f'\tmedian => kernel: {kernel}')
+        try:
             c_disp_map = cv.medianBlur(disp_map, kernel)
-            c_disp_map, _ = normalize_map(disp_map)
 
-            c_sum = np.sum(np.abs(c_disp_map - ground_truth))
+            errors = get_diff_percent(c_disp_map, ground_truth, ERROR_THRESHOLD)
+            # print(f'\t\terrors: {errors}')
 
-            if c_sum < min_sum:
-                min_sum = c_sum
-                max_kernel = kernel
+            with open(f'{RESULT_DIR}/method_comparison.csv', 'a') as out_file:
+                out_file.write(f'{method_name};{block_sz};{0};{0};{kernel};{errors}\n')
+        except:
+            pass
 
-        c_disp_map = cv.medianBlur(disp_map, max_kernel)
-        disp_map_name = disp_map_name[:-4] + f'_med_k{max_kernel}_sm{c_sum}.png'
-        cv.imwrite(disp_map_name, c_disp_map)
+def get_pfm_image(img_name: str) -> np.ndarray:
+    # loader = PFMLoader(color=False, compress=True)
+    # img = loader.load_pfm(img_name)
+
+    # return np.asarray(img)
+
+    file = open(img_name, 'rb')
+
+    color = None
+    width = None
+    height = None
+    scale = None
+    endian = None
+
+    header = file.readline().rstrip().decode()
+    if header == 'PF':
+        color = True
+    elif header == 'Pf':
+        color = False
+    else:
+        raise Exception('Not a PFM file.')
+
+    dim_match = re.match(r'^(\d+)\s(\d+)\s$', file.readline().decode())
+    if dim_match:
+        width, height = map(int, dim_match.groups())
+    else:
+        raise Exception('Malformed PFM header.')
+
+    scale = float(file.readline().rstrip())
+    if scale < 0:  # little-endian
+        endian = '<'
+        scale = -scale
+    else:
+        endian = '>'  # big-endian
+
+    data = np.fromfile(file, endian + 'f')
+    shape = (height, width, 3) if color else (height, width)
+
+    data = np.reshape(data, shape)
+    data = np.flipud(data).copy()
+    if len(data.shape) == 2:
+        data = data[:, :, np.newaxis]
+
+    file.close()
+
+    return data
+
+def get_pgm_image(img_name: str) -> np.ndarray:
+    with NetpbmFile(img_name) as pgm:
+        img = pgm.asarray()
+
+    return img
 
 def _parse_intrinsic(raw_line):
     return [

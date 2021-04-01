@@ -1,2 +1,7 @@
 pip
 opencv-python==4.4.0.46
+
+matplotlib==3.4.0
+
+pypfm==1.4.4
+netpbmfile==2020.10.18
