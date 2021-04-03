@@ -6,18 +6,21 @@ from .variables import DISP_BLOCK_SEARCH, MIN_DISP_FILTER_SZ
 
 
 def get_diff_percent(map1, map2, threshold):
-    errors = np.abs(map1 - map2) > threshold
+    diff = map1 - map2
+    errors = np.abs(diff) > threshold
 
-    return np.round(np.count_nonzero(errors) / map2.size, decimals=4)
+    return np.round(np.count_nonzero(errors) / map2.size, decimals=4), diff
 
 
 def basic_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH
+    lookup_size:int = DISP_BLOCK_SEARCH,
 ) -> np.ndarray:
-    """Disparity map using OpenCV default method
+    """Disparity map using OpenCV default method, after empirical tests
+
+    Based on: https://gist.github.com/andijakl/ffe6e5e16742455291ef2a4edbe63cb7
 
     Args:
     - `img_left:np.ndarray`: Left image
@@ -28,10 +31,41 @@ def basic_disp_map(
     Returns:
     - Disparity map
     """
-    return cv.StereoBM_create(
+    # Margin in percentage by which the best (minimum) computed cost function value should "win" the second best value to consider the found match correct.
+    # Normally, a value within the 5-15 range is good enough
+    uniquenessRatio = 14
+    # Maximum size of smooth disparity regions to consider their noise speckles and invalidate.
+    # Set it to 0 to disable speckle filtering. Otherwise, set it somewhere in the 50-200 range.
+    speckleWindowSize = 197
+    # Maximum disparity variation within each connected component.
+    # If you do speckle filtering, set the parameter to a positive value, it will be implicitly multiplied by 16.
+    # Normally, 1 or 2 is good enough.
+    speckleRange = 1
+    disp12MaxDiff = 0
+
+    stereo = cv.StereoSGBM_create(
+        minDisparity=0,
         numDisparities=lookup_size,
-        blockSize=block_sz
-    ).compute(img_left, img_right)
+        blockSize=block_sz,
+        uniquenessRatio=uniquenessRatio,
+        speckleWindowSize=speckleWindowSize,
+        speckleRange=speckleRange,
+        disp12MaxDiff=disp12MaxDiff,
+        P1=8 * 1 * block_sz * block_sz,
+        P2=32 * 1 * block_sz * block_sz,
+    )
+
+    padding = int(block_sz / 2)
+    img_left = np.pad(
+        img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
+    )
+    img_right = np.pad(
+        img_right, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
+    )
+
+    disp_map = stereo.compute(img_left, img_right)
+
+    return disp_map[padding:-padding, padding:-padding]
 
 
 def windowing_disp_map(
@@ -54,7 +88,7 @@ def windowing_disp_map(
     disp_map = np.zeros_like(img_left)
     padding = int(block_sz / 2)
 
-    accept_diff = 10
+    accept_diff = 12
     accept_diff *= block_sz + 1
 
     img_left = np.pad(
@@ -82,7 +116,7 @@ def windowing_disp_map(
             if x_match != -1:
                 try:
                     search = np.sum(search[x_match])
-                    x_match = x_match + x_r_min if search <= accept_diff else -1
+                    x_match = x_match + x_r_min + padding if search <= accept_diff else -1
                 except:
                     input(f'match: {x_match} | search:\n{search}')
                     x_match = -1
@@ -143,7 +177,7 @@ def x_correlation_disp_map(
 
             if x_match != -1:
                 # print(f'\tx_correlation[{x_match}]: {x_correlation[x_match]} | {np.sum(search[x_match] - ref)}')
-                x_match = x_match + x_min if 1 - x_correlation[x_match] <= x_corr_accept_diff else -1
+                x_match = x_match + x_min + padding if 1 - x_correlation[x_match] <= x_corr_accept_diff else -1
 
             # input()
 
@@ -171,7 +205,7 @@ def linear_search_disp_map(
     """
     disp_map = np.zeros_like(img_left)
 
-    accept_diff = 10
+    accept_diff = 12
     accept_diff *= block_sz + 1
 
     for y in range(img_left.shape[0]):
@@ -186,14 +220,14 @@ def linear_search_disp_map(
             search_box = rolling_window(img_right[y, x_min:x_r_max], ref.size).astype(np.int32) - ref
 
             if search_box.size <= 1:
-                x_match = -1
+                x_match = x_l - 1
             else:
                 x_match = int(closest_idx(search_box, 0) / ref.size)
                 search = np.sum(search_box[x_match])
 
                 x_match = x_match + x_min if search <= accept_diff else -1
 
-            disp_map[y, x_l] = x_l - x_match if x_match <= x_l and x_match != 1 else -1
+            disp_map[y, x_l] = max(0, x_l - x_match) if x_match != 1 else -1
 
     return _minimize_invalid_pxl(disp_map)
 
@@ -207,7 +241,7 @@ def judged_windowing_disp_map(
     disp_map = np.zeros_like(img_left).astype(np.int32)
     padding = 1
 
-    accept_diff = 10
+    accept_diff = 12
     accept_diff *= (((padding * 2) + 1) ** 2)
 
     img_left = np.pad(
@@ -223,23 +257,23 @@ def judged_windowing_disp_map(
         y_min, y_max = max(0, y - padding), min(y + padding + 1, img_left.shape[0])
 
         for unpadded_x, x_l in enumerate(range(padding, img_left.shape[1] - padding)):
-            x_l_min, x_l_max = max(0, x_l - padding), min(x_l + padding + 1, img_left.shape[1])
+            x_l_min, x_max = max(0, x_l - padding), min(x_l + padding + 1, img_left.shape[1])
             x_r_min = max(0, x_l_min - lookup_size)
 
-            ref = img_left[y_min:y_max, x_l_min:x_l_max]
-            search_box = img_right[y_min:y_max, x_r_min:x_l_max]
+            ref = img_left[y_min:y_max, x_l_min:x_max]
+            search_box = img_right[y_min:y_max, x_r_min:x_max]
             search_box = rolling_window_2D(search_box, ref)[0]
 
             if search_box.shape[0] == 1:
-                x_match = -1
+                x_match = x_l - 1
             else:
                 search = np.sum(np.sum(np.abs(search_box - ref), axis=1), axis=1)
-                x_match = closest_idx(search, 0)
-                search = search[x_match]
+                x_match_ = closest_idx(search, 0)
+                search = search[x_match_]
 
-                x_match = x_match + x_r_min if search <= accept_diff else -1
+                x_match = x_match + x_r_min + padding
 
-            disp_map[unpadded_y, unpadded_x] = x_l - x_match if x_match <= x_l and x_match != 1 else -1
+            disp_map[unpadded_y, unpadded_x] = max(0, x_l - x_match) if x_match != 1 else -1
 
     return _minimize_invalid_pxl(disp_map)
 
