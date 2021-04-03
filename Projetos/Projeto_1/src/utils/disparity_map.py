@@ -5,11 +5,22 @@ from .utils import closest_idx, rolling_window, rolling_window_2D
 from .variables import DISP_BLOCK_SEARCH, MIN_DISP_FILTER_SZ
 
 
-def get_diff_percent(map1, map2, threshold):
-    diff = map1 - map2
+def get_diff_percent(target_img: np.ndarray, base_img: np.ndarray, threshold: float) -> tuple:
+    """Calculate the diff ratio between two images, usually disparity maps, based on threshold value.
+
+    Args:
+    - `target_img:np.ndarray`: Target image to calculate the error
+    - `base_img:np.ndarray`: Base image
+    - `threshold:float`: Diff threshold
+
+    Returns:
+    - Diff ratio
+    - Raw diff image
+    """
+    diff = target_img - base_img
     errors = np.abs(diff) > threshold
 
-    return np.round(np.count_nonzero(errors) / map2.size, decimals=4), diff
+    return np.round(np.count_nonzero(errors) / base_img.size, decimals=4), diff
 
 
 def basic_disp_map(
@@ -278,33 +289,41 @@ def judged_windowing_disp_map(
     return _minimize_invalid_pxl(disp_map)
 
 
-def _minimize_invalid_pxl(disp_map):
-    disp_map[disp_map == -0] = 0
+def _minimize_invalid_pxl(orig: np.ndarray) -> np.ndarray:
+    """Replace invalid pixels (marked as -1) by the 9-neighbors mean
 
-    if np.min(disp_map) != -1:
-        return disp_map
+    Args:
+    - `orig:np.ndarray`: Original image with invalid pixels
+
+    Returns:
+    - Handled image
+    """
+    orig[orig == -0] = 0
+
+    if np.min(orig) != -1:
+        return orig
 
     padding = 1
 
-    disp_map = np.pad(
-        disp_map, [(padding, padding), (padding, padding)], mode='constant', constant_values=256
+    orig = np.pad(
+        orig, [(padding, padding), (padding, padding)], mode='constant', constant_values=256
     ).astype(np.float32)
-    disp_map[disp_map == 256] = np.nan
+    orig[orig == 256] = np.nan
 
     invalid_pxl_replacements = np.round(np.array(
         np.nanmean(
             np.array([
-                disp_map[:-2, :-2],
-                disp_map[1:-1, :-2],
-                disp_map[2:, :-2],
+                orig[:-2, :-2],
+                orig[1:-1, :-2],
+                orig[2:, :-2],
 
-                disp_map[:-2, 1:-1],
-                disp_map[1:-1, 1:-1],
-                disp_map[2:, 1:-1],
+                orig[:-2, 1:-1],
+                orig[1:-1, 1:-1],
+                orig[2:, 1:-1],
 
-                disp_map[:-2, 2:],
-                disp_map[1:-1, 2:],
-                disp_map[2:, 2:],
+                orig[:-2, 2:],
+                orig[1:-1, 2:],
+                orig[2:, 2:],
             ]),
             axis=0,
             keepdims=True
@@ -313,9 +332,9 @@ def _minimize_invalid_pxl(disp_map):
 
     invalid_pxl_replacements[invalid_pxl_replacements == -1] = 255
 
-    disp_map = disp_map[1:-1, 1:-1]
+    orig = orig[1:-1, 1:-1]
 
-    idxs = np.where(disp_map == -1)
-    disp_map[idxs] = invalid_pxl_replacements[idxs]
+    idxs = np.where(orig == -1)
+    orig[idxs] = invalid_pxl_replacements[idxs]
 
-    return disp_map
+    return orig
