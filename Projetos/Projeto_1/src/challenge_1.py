@@ -1,20 +1,22 @@
 import cv2 as cv
 import numpy as np
 from utils.depth_map import draw_depth_map
-from utils.disparity_map import (basic_disp_map, get_diff_percent, judged_windowing_disp_map, linear_search_disp_map,
-                                 windowing_disp_map, x_correlation_disp_map)
-from utils.utils import get_pfm_image, get_pgm_image, get_resize_shape, normalize_map, parse_calib_file
-from utils.variables import ERROR_THRESHOLD, MEDIAN_FLT_SZ, MIN_DISP_FILTER_SZ, RESULT_DIR, SHOULD_RESIZE, WORKDIRS
+from utils.disparity_map import (basic_disp_map, get_diff_percent, linear_search_disp_map,
+                                 slow_adaptative_windowing_disp_map, windowing_disp_map, x_correlation_disp_map)
+from utils.utils import get_pfm_image, get_pgm_image, get_resize_shape, normalize_map, parse_calib_file, gamma_ajust
+from utils.variables import (ERROR_THRESHOLD, MAX_DISP_FILTER_SZ, MEDIAN_FLT_SZ, MIN_DISP_FILTER_SZ, RESULT_DIR,
+                             SHOULD_RESIZE, WORKDIRS_C1)
 
 print('Challenge 1: Disparities and deepness\n')
 
-for workdir in WORKDIRS:
+for workdir in WORKDIRS_C1:
     calib = parse_calib_file(f'{workdir}/calib.txt')
 
     img_left = cv.imread(f'{workdir}/im0.png', cv.IMREAD_UNCHANGED)
     img_right = cv.imread(f'{workdir}/im1.png', cv.IMREAD_UNCHANGED)
 
     lookup_size = calib['disp_n']
+    resize_ratio = 1
 
     disp_map_gt = get_pfm_image(f'{workdir}/disp0.pfm')
 
@@ -37,19 +39,20 @@ for workdir in WORKDIRS:
     disp_map_gt = np.array(disp_map_gt.reshape(disp_map_gt.shape[:-1]))
     eq_disp_map_gt, max_eq_disp_map_gt = normalize_map(disp_map_gt)
 
-    gray_left = cv.cvtColor(img_left, cv.COLOR_BGR2GRAY)
-    gray_right = cv.cvtColor(img_right, cv.COLOR_BGR2GRAY)
+    gray_left = cv.equalizeHist(cv.cvtColor(img_left, cv.COLOR_BGR2GRAY))
+    gray_right = cv.equalizeHist(cv.cvtColor(img_right, cv.COLOR_BGR2GRAY))
 
     methods = [
-        # (basic_disp_map, 'Default OpenCV'),
-        # (judged_windowing_disp_map, 'Janela deslizante limitada'),
-        # (linear_search_disp_map, 'Busca linear'),
-        # (x_correlation_disp_map, 'Correlação cruzada'),
-        # (windowing_disp_map, 'Janela deslizante'),
+        (basic_disp_map, 'Default OpenCV'),
+        (linear_search_disp_map, 'Busca linear'),
+        (x_correlation_disp_map, 'Correlação cruzada'),
+        (windowing_disp_map, 'Janela deslizante'),
+        (slow_adaptative_windowing_disp_map, 'Janela deslizante adaptativa'),
     ]
 
+    workdir_name = workdir.split("/")[-1]
     for method, label in methods:
-        for block_sz in range(MIN_DISP_FILTER_SZ, 17, 2):
+        for block_sz in range(MIN_DISP_FILTER_SZ, MAX_DISP_FILTER_SZ, 2):
             print(f'method: {label} | block_sz: {block_sz}')
             disp_map = method(gray_left, gray_right, block_sz, lookup_size)
 
@@ -59,22 +62,22 @@ for workdir in WORKDIRS:
                 pass
 
             perc_errors, diff = get_diff_percent(disp_map, disp_map_gt, ERROR_THRESHOLD)
-            print(f'\terrors: {perc_errors} | min: {np.nanmin(diff)} | max: {np.nanmax(diff)}')
+            print(f'errors: {perc_errors}')
 
             eq_disp_map, _ = normalize_map(disp_map)
             perc_errors, diff = get_diff_percent(eq_disp_map, eq_disp_map_gt, ERROR_THRESHOLD)
-            print(f'\terrors: {perc_errors} | min: {np.nanmin(diff)} | max: {np.nanmax(diff)}')
+            print(f'norm errors: {perc_errors}')
 
-            cv.imwrite(f'{RESULT_DIR}/{method.__name__}_bl{block_sz}.png', disp_map)
-            cv.imwrite(f'{RESULT_DIR}/{method.__name__}_eq_bl{block_sz}.png', eq_disp_map)
+            cv.imwrite(f'{RESULT_DIR}/{workdir_name}_{method.__name__}_bl{block_sz}.png', disp_map)
+            cv.imwrite(f'{RESULT_DIR}/{workdir_name}_{method.__name__}_eq_bl{block_sz}.png', eq_disp_map)
 
             draw_depth_map(
                 calib, disp_map, label,
-                resize_ratio, f'{RESULT_DIR}/depth_{method.__name__}_bl{block_sz}.png'
+                resize_ratio, f'{RESULT_DIR}/depth_{workdir_name}_{method.__name__}_bl{block_sz}.png'
             )
             draw_depth_map(
                 calib, eq_disp_map, label,
-                resize_ratio, f'{RESULT_DIR}/depth_{method.__name__}_eq_bl{block_sz}.png'
+                resize_ratio, f'{RESULT_DIR}/depth_{workdir_name}_{method.__name__}_eq_bl{block_sz}.png'
             )
 
 print('\nEnding: Challenge 1')
