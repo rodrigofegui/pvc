@@ -27,7 +27,7 @@ def basic_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH,
+    lookup_size:int = DISP_BLOCK_SEARCH
 ) -> np.ndarray:
     """Disparity map using OpenCV default method, after empirical tests
 
@@ -44,17 +44,22 @@ def basic_disp_map(
     """
     # Margin in percentage by which the best (minimum) computed cost function value should "win" the second best value to consider the found match correct.
     # Normally, a value within the 5-15 range is good enough
-    uniquenessRatio = 14
+    uniquenessRatio = 10
     # Maximum size of smooth disparity regions to consider their noise speckles and invalidate.
     # Set it to 0 to disable speckle filtering. Otherwise, set it somewhere in the 50-200 range.
-    speckleWindowSize = 197
+    speckleWindowSize = 200
     # Maximum disparity variation within each connected component.
     # If you do speckle filtering, set the parameter to a positive value, it will be implicitly multiplied by 16.
     # Normally, 1 or 2 is good enough.
     speckleRange = 1
     disp12MaxDiff = 0
+    # Lambda is a parameter defining the amount of regularization during filtering
+    wls_lambda=.5
+    # SigmaColor is a parameter defining how sensitive the filtering process is to source
+    # image edges. Large values can lead to disparity leakage through low-contrast edges.
+    wls_sigma_color=80
 
-    stereo = cv.StereoSGBM_create(
+    stereo_L = cv.StereoSGBM_create(
         minDisparity=0,
         numDisparities=lookup_size,
         blockSize=block_sz,
@@ -65,18 +70,16 @@ def basic_disp_map(
         P1=8 * 1 * block_sz * block_sz,
         P2=32 * 1 * block_sz * block_sz,
     )
+    stereo_R = cv.ximgproc.createRightMatcher(stereo_L)
+    wls_filter = cv.ximgproc.createDisparityWLSFilter(stereo_L)
+    wls_filter.setLambda(wls_lambda)
+    wls_filter.setSigmaColor(wls_sigma_color)
 
-    padding = int(block_sz / 2)
-    img_left = np.pad(
-        img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
-    )
-    img_right = np.pad(
-        img_right, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
-    )
+    disp_map_L = stereo_L.compute(img_left, img_right)
+    disp_map_R = stereo_R.compute(img_right, img_left)
+    disp_map = wls_filter.filter(disp_map_L, img_left, disparity_map_right=disp_map_R, right_view=img_right)
 
-    disp_map = stereo.compute(img_left, img_right)
-
-    return disp_map[padding:-padding, padding:-padding]
+    return disp_map
 
 
 def windowing_disp_map(
@@ -219,6 +222,7 @@ def linear_search_disp_map(
     accept_diff = 12
     accept_diff *= block_sz + 1
 
+
     for y in range(img_left.shape[0]):
         # print(f'linha: {y}', end='\r')
         for x_l in range(img_left.shape[1]):
@@ -243,12 +247,66 @@ def linear_search_disp_map(
     return _minimize_invalid_pxl(disp_map)
 
 
-def judged_windowing_disp_map(
+def slow_adaptative_windowing_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
     lookup_size:int = DISP_BLOCK_SEARCH
 ) -> np.ndarray:
+    """Disparity map using windowing method with raw python, so it can takes a while
+
+    Args:
+    - `img_left:np.ndarray`: Left image
+    - `img_right:np.ndarray`: Right image
+    - `block_sz:int`: Filter size, default value `MIN_DISP_FILTER_SZ`
+    - `lookup_size:int`: Superior limit to lookup, default value `DISP_BLOCK_SEARCH`
+
+    Returns:
+    - Disparity map
+    """
+    padding = int(block_sz / 2)
+
+    disp_map = np.zeros_like(img_left)
+    matched = np.zeros_like(img_left)
+
+    for y in range(img_left.shape[0]):
+        # print(f'linha: {y}')
+        for x_l in range(img_left.shape[1] - 1, -1, -1):
+            # print(f'coluna: {x_l}')
+            sum_match, x_match = float('inf'), x_l
+            # print(f'ref[{y}, {x}]:\n{ref}')
+
+            for x_r in range(np.argmax(matched[y]) or x_l, -1, -1):
+                x_min, y_min = max(0, x_r - padding), max(0, y - padding)
+                x_max, y_max = min(x_r + padding + 1, img_left.shape[1]), min(y + padding + 1, img_left.shape[0])
+
+                # Shape match ajustment
+                x_l_max = min(x_l + x_max - x_r, img_left.shape[1])
+                x_max = min(x_r + x_l_max - x_l, img_left.shape[1])
+
+                search = img_right[y_min:y_max, x_min:x_max]
+                ref = img_left[y_min:y_max, x_l + x_min - x_r:x_l_max]
+                try:
+                    diff = abs(ref - search)
+                    cmp_sum = np.sum(diff)
+                except:
+                    pass
+
+                if cmp_sum < sum_match:
+                    # print(f'\t{x_l} -> {x_r}'):
+                    sum_match = cmp_sum
+                    x_match = x_r
+
+            # input('waiting...')
+
+            # print(f'\t{x_l} -> {x_match}')
+            disp_map[y, x_l] = (x_l - x_match) or 255
+            matched[y, x_match] = 1
+
+    return disp_map
+
+
+
     disp_map = np.zeros_like(img_left).astype(np.int32)
     padding = 1
 
