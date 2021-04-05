@@ -101,6 +101,61 @@ def parse_calib_file(file_name: str) -> dict:
     }
 
 
+def parse_camera_c2(file_name: str) -> dict:
+    with open(file_name, encoding='UTF-8') as camera_file:
+        lines = camera_file.readlines()
+
+    intrinsic_matrix = np.zeros((3, 3), dtype=np.float64)
+    extrinsic_matrix = np.zeros((3, 4), dtype=np.float64)
+
+    intrinsic_matrix[2][2] = 1
+
+    reading_rotation = 0
+
+    for line in lines:
+        if line.startswith('%'):
+            continue
+
+        line = line.rstrip('\n').replace('[', '').replace(']', '').strip().split('=')
+
+        if line[0].startswith('fc'):
+            cx, cy = line[1].strip().split('; ')
+
+            intrinsic_matrix[0][0] = float(cx)
+            intrinsic_matrix[1][1] = float(cy)
+
+        elif line[0].startswith('cc'):
+            cx, cy = line[1].strip().split('; ')
+
+            intrinsic_matrix[0][2] = float(cx)
+            intrinsic_matrix[1][2] = float(cy)
+
+        elif line[0].startswith('alpha'):
+            skew = line[1].strip().split(';')[0]
+
+            intrinsic_matrix[0][1] = float(skew)
+
+        elif line[0].startswith('R'):
+            values = [float(v.strip()) for v in line[1].strip().rstrip(' ;').split(',')]
+
+            extrinsic_matrix[0, :3] = values
+            reading_rotation = 1
+
+        elif line[0].startswith('Tc'):
+            extrinsic_matrix[:, 3] = np.asarray([float(v.strip()) for v in line[1].strip().split(';')]).reshape((1, 3))
+
+        elif reading_rotation and line[0]:
+            values = [v.strip() for v in line[0].strip().rstrip(' ;').split(',')]
+
+            extrinsic_matrix[reading_rotation, :3] = values
+            reading_rotation += 1
+
+    return {
+        'intrinsic': intrinsic_matrix,
+        'extrinsic': extrinsic_matrix,
+    }
+
+
 def rolling_window(orig: np.ndarray, size: int) -> np.ndarray:
     """Generate rolling windows to a 1D array
 
@@ -210,6 +265,12 @@ def normalize_map(target: np.ndarray) -> tuple:
     target = np.round(target, decimals=0)
 
     return target.astype(c_dtype), target_max
+
+
+def gamma_ajust(src: np.ndarray, gamma: float=1.5) -> np.ndarray:
+    ajust = np.power(src / float(np.max(src)), 1/gamma)
+
+    return np.round(ajust * 255, decimals=0).astype(np.uint8)
 
 
 def _parse_intrinsic(raw_line: str) -> np.array:
