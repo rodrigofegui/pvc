@@ -1,5 +1,6 @@
 from re import match
 
+import cv2 as cv
 import numpy as np
 from netpbmfile import NetpbmFile
 
@@ -271,6 +272,29 @@ def gamma_ajust(src: np.ndarray, gamma: float=1.5) -> np.ndarray:
     ajust = np.power(src / float(np.max(src)), 1/gamma)
 
     return np.round(ajust * 255, decimals=0).astype(np.uint8)
+
+
+def isolate_action_figure(src: np.ndarray) -> np.ndarray:
+    toy_mask = cv.adaptiveThreshold(
+        cv.cvtColor(src, cv.COLOR_BGR2GRAY),
+        255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,
+        255, 10
+    )
+
+    circle_filter_sz = 51
+    filter_center = int(circle_filter_sz / 2)
+
+    kernel = np.zeros((circle_filter_sz, circle_filter_sz))
+    xx, yy = np.mgrid[:circle_filter_sz, :circle_filter_sz]
+
+    kernel = ((xx - filter_center) ** 2 + (yy - filter_center) ** 2).astype(np.float32)
+    threshold = kernel[0][filter_center]
+    kernel[kernel > threshold] = 0
+    kernel[kernel <= threshold] = 1
+
+    toy_mask = cv.morphologyEx(toy_mask, cv.MORPH_CLOSE, kernel)
+
+    return cv.bitwise_and(src, src, mask=toy_mask)
 
 
 def _parse_intrinsic(raw_line: str) -> np.array:

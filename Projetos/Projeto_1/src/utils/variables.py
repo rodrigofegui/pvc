@@ -7,7 +7,7 @@ WORKDIRS_C1 = [
 # Base dirs to Challenge #2
 WORKDIRS_C2 = [
     '../data/FurukawaPonce/Morpheus',
-    # '../data/FurukawaPonce/warrior',
+    '../data/FurukawaPonce/warrior',
 ]
 
 # Dir to save the result images
