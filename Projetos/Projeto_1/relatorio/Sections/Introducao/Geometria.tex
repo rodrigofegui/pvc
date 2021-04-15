@@ -1,0 +1,7 @@
+\subsection{Geometria}
+    \label{subsec:intro_geo}
+No sistema de coordenadas euclidianas há um problema da representatividade da origem e dos demais pontos, uma vez que o primeiro é um ponto distinto e os demais são geometricamente idênticos. Como solução têm-se as~\emph{coordenadas homogêneas}, onde a origem é removida do plano e acrescida de uma dimensão~\cite{Li2001}. Nestas coordenadas, têm-se as equivalências de representação: pontos 2D são representados como $\mathbf{X} = (x, y)$ no espaço euclidiano são representados como $\mathbf{\Tilde{X}} = \mathbf{\Tilde{w}}(x, y, 1)$; linha 2D de $\mathbf{L} = ax + by + c$ paraa $\mathbf{\Tilde{L}} = (a, b, c)$; e ponto 3D de $\mathbf{X} = (x, y, z)$ para $\mathbf{\Tilde{X}} = \mathbf{\Tilde{w}}(x, y, z, 1)$.
+
+Em coordenadas homogêneas, as transformações geométricas são multiplicação de matrizes, como: a~\emph{translação} ($\mathbf{x}'_{trans} = \big[ ~\mathbf{I}  ~|~ \mathbf{t}~ \big] ~ \mathbf{\Tilde{x}}$) e a~\emph{rotação com translação} ($\mathbf{x}'_{rot + trans} = \big[ ~\mathbf{R}  ~|~ \mathbf{t}~ \big] ~ \mathbf{\Tilde{x}}$), onde $\mathbf{R}\mathbf{R}^{T} = \mathbf{I}$ e $| \mathbf{R} | = 1$.
+
+Além disso, um produto vetorial $\mathbf{v}_{\times} = \mathbf{a} \times \mathbf{b}$ é equivalente à multiplicação de matrizes $\mathbf{v}_{\times} = {[\mathbf{a}]}_{\times} \mathbf{b}$, sendo ${[\mathbf{a}]}_{\times}$ a forma matricial do operador de produto vetorial~\cite{Szeliski2012}.

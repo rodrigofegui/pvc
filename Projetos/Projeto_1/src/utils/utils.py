@@ -103,6 +103,14 @@ def parse_calib_file(file_name: str) -> dict:
 
 
 def parse_camera_c2(file_name: str) -> dict:
+    """Parse raw challenge #2 calibration file into a dict
+
+    Args:
+    - `file_name:str`: Calibration file name
+
+    Returns:
+    - Parsed calibration info
+    """
     with open(file_name, encoding='UTF-8') as camera_file:
         lines = camera_file.readlines()
 
@@ -155,6 +163,25 @@ def parse_camera_c2(file_name: str) -> dict:
         'intrinsic': intrinsic_matrix,
         'extrinsic': extrinsic_matrix,
     }
+
+
+def pre_processing(img_src: np.ndarray, contrast: float=1.5, brightness: int=20) -> np.ndarray:
+    """Common pre processing to ajust original image contrast and brightness then
+    equalizing its histogram
+
+    Args:
+    - `img_src:np.ndarray`: Raw image
+    - `contrast:float`: Contrast ajust, the higher value the whiter image
+    - `brightness:int`: Brightness ajust, the higher value the whiter image
+
+    Returns:
+    - Ajusted image
+    """
+    img_dst = cv.cvtColor(img_src, cv.COLOR_BGR2GRAY)
+    img_dst = np.clip((img_dst * contrast) + brightness, 0, 255).astype(np.uint8)
+    img_dst = cv.equalizeHist(img_dst)
+
+    return img_dst
 
 
 def rolling_window(orig: np.ndarray, size: int) -> np.ndarray:
@@ -254,6 +281,8 @@ def normalize_map(target: np.ndarray) -> tuple:
 
     target = target.astype(np.float64)
 
+    target[target < 0] = 0
+
     target_max = np.max(target)
 
     if target_max == float('inf'):
@@ -268,33 +297,73 @@ def normalize_map(target: np.ndarray) -> tuple:
     return target.astype(c_dtype), target_max
 
 
-def gamma_ajust(src: np.ndarray, gamma: float=1.5) -> np.ndarray:
-    ajust = np.power(src / float(np.max(src)), 1/gamma)
+def get_key_pts(img_base: np.ndarray, img_corresp: np.ndarray) -> tuple:
+    """Search for sparse key point at the image
 
-    return np.round(ajust * 255, decimals=0).astype(np.uint8)
+    Args:
+    - `img_base:np.ndarray`: Base image
+    - `img_corresp:np.ndarray`: Correspondent image
+
+    Returns:
+    - Both image key points
+    """
+    from .variables import BEST_MATCH_PERC, FLANN_INDEX_KDTREE, MATCHES_PER_PT
+
+    sift = cv.SIFT_create(contrastThreshold=.007, edgeThreshold=20)
+
+    raw_key_pts_base, descriptors_base = sift.detectAndCompute(img_base, None)
+    raw_key_pts_corresp, descriptors_corresp = sift.detectAndCompute(img_corresp, None)
+
+    index_params = {
+        'algorithm': FLANN_INDEX_KDTREE,
+        'trees': 5
+    }
+    search_params = {'checks': 50}
+
+    flann = cv.FlannBasedMatcher(index_params,search_params)
+    matches = flann.knnMatch(descriptors_base, descriptors_corresp, k=MATCHES_PER_PT)
+
+    key_pts_base = []
+    key_pts_corresp = []
+    # ratio test as per Lowe's paper
+    for m_L, m_R in matches:
+        if m_L.distance < BEST_MATCH_PERC * m_R.distance:
+            key_pts_base.append(raw_key_pts_base[m_L.queryIdx].pt)
+            key_pts_corresp.append(raw_key_pts_corresp[m_L.trainIdx].pt)
+
+    key_pts_base = np.array(key_pts_base, dtype=np.int32)
+    key_pts_corresp = np.array(key_pts_corresp, dtype=np.int32)
+
+    return key_pts_base, key_pts_corresp
 
 
-def isolate_action_figure(src: np.ndarray) -> np.ndarray:
-    toy_mask = cv.adaptiveThreshold(
-        cv.cvtColor(src, cv.COLOR_BGR2GRAY),
-        255, cv.ADAPTIVE_THRESH_GAUSSIAN_C, cv.THRESH_BINARY_INV,
-        255, 10
-    )
+def rectify_corresp_imgs(
+    img_base: np.ndarray, img_corresp: np.ndarray,
+    key_pts_base: np.array, key_pts_corresp: np.array
+) -> tuple:
+    """Rectify correspondent images considering theirs key points
 
-    circle_filter_sz = 51
-    filter_center = int(circle_filter_sz / 2)
+    Args:
+    - `img_base:np.ndarray`: Base image
+    - `img_corresp:np.ndarray`: Correspondent image
+    - `key_pts_base:np.array`: Base image key points
+    - `key_pts_corresp:np.array`: Corresoondent image key points
 
-    kernel = np.zeros((circle_filter_sz, circle_filter_sz))
-    xx, yy = np.mgrid[:circle_filter_sz, :circle_filter_sz]
+    Return:
+    - Both rectified image
+    """
+    fund_matrix, mask = cv.findFundamentalMat(key_pts_base, key_pts_corresp, cv.FM_LMEDS)
 
-    kernel = ((xx - filter_center) ** 2 + (yy - filter_center) ** 2).astype(np.float32)
-    threshold = kernel[0][filter_center]
-    kernel[kernel > threshold] = 0
-    kernel[kernel <= threshold] = 1
+    # # We select only inlier points
+    key_pts_base = key_pts_base[mask.ravel() == 1]
+    key_pts_corresp = key_pts_corresp[mask.ravel() == 1]
 
-    toy_mask = cv.morphologyEx(toy_mask, cv.MORPH_CLOSE, kernel)
+    _, h1, h2 = cv.stereoRectifyUncalibrated(key_pts_base, key_pts_corresp, fund_matrix, img_base.shape)
 
-    return cv.bitwise_and(src, src, mask=toy_mask)
+    ret_img_base = cv.warpPerspective(img_base, h1, (img_base.shape[1], img_base.shape[0]))
+    ret_img_corresp = cv.warpPerspective(img_corresp, h2, (img_corresp.shape[1], img_corresp.shape[0]))
+
+    return ret_img_base, ret_img_corresp
 
 
 def _parse_intrinsic(raw_line: str) -> np.array:

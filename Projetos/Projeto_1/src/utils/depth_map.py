@@ -23,9 +23,9 @@ def get_depth_map(calib: dict, disp_map: np.ndarray) -> np.ndarray:
     return depth_map
 
 
-def draw_depth_map(
+def save_depth_map(
     calib: dict, disp_map: np.ndarray,
-    title_detail: str='-', ratio_sz: float=1,
+    title_detail: str='-',
     file_name: str=None
 ) -> None:
     """Draw depth map considering a disparity map either saving it or showing it
@@ -38,13 +38,13 @@ def draw_depth_map(
     - `file_name:str`: File name to save the depth map
     """
     depth_map = get_depth_map(calib, disp_map)
-    norm_depth_map = cv.normalize(depth_map, None, 255, 0, cv.NORM_MINMAX, cv.CV_8UC1)
-    eq_depth_map = cv.equalizeHist(norm_depth_map)
+    # norm_depth_map = cv.normalize(depth_map, None, 255, 0, cv.NORM_MINMAX, cv.CV_8UC1)
+    # eq_depth_map = cv.equalizeHist(norm_depth_map)
 
-    min_dist = np.round(np.min(depth_map) * .0001 * ratio_sz, decimals=2)
-    max_dist = np.round(np.max(depth_map) * .0001 * ratio_sz, decimals=2)
+    min_dist = np.round(np.min(depth_map) * .0001, decimals=2)
+    max_dist = np.round(np.max(depth_map) * .0001, decimals=2)
 
-    plotter.colorbar(plotter.imshow(eq_depth_map, cmap='gist_heat'))
+    plotter.colorbar(plotter.imshow(depth_map, cmap='gist_heat'))
     plotter.suptitle(f'Mapa de profundidade: {title_detail}', fontsize=14, y=.95)
     plotter.title(f'Norm. e eq.: {min_dist} - {max_dist} m', fontsize=8, y=1.08, x=.55)
 

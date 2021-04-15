@@ -1,8 +1,9 @@
 import cv2 as cv
 import numpy as np
+import matplotlib.pyplot as plotter
 
 from .utils import closest_idx, rolling_window, rolling_window_2D
-from .variables import DISP_BLOCK_SEARCH, MIN_DISP_FILTER_SZ
+from .variables import MAX_DISP_LOOKUP, MIN_DISP_FILTER_SZ
 
 
 def get_diff_percent(target_img: np.ndarray, base_img: np.ndarray, threshold: float) -> tuple:
@@ -23,11 +24,23 @@ def get_diff_percent(target_img: np.ndarray, base_img: np.ndarray, threshold: fl
     return np.round(np.count_nonzero(errors) / base_img.size, decimals=4), diff
 
 
+def save_disp_map(disp_map: np.ndarray, title_detail: str='-', file_name: str=None) -> None:
+    plotter.colorbar(plotter.imshow(disp_map, cmap='gist_heat'))
+    plotter.suptitle(f'Mapa de disparidade: {title_detail}', fontsize=14, y=.95)
+
+    if file_name:
+        plotter.savefig(file_name)
+    else:
+        plotter.show()
+
+    plotter.clf()
+
+
 def basic_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH
+    lookup_size:int = MAX_DISP_LOOKUP
 ) -> np.ndarray:
     """Disparity map using OpenCV default method, after empirical tests
 
@@ -37,7 +50,7 @@ def basic_disp_map(
     - `img_left:np.ndarray`: Left image
     - `img_right:np.ndarray`: Right image
     - `block_sz:int`: Filter size, default value `MIN_DISP_FILTER_SZ`
-    - `lookup_size:int`: Superior limit to lookup, default value `DISP_BLOCK_SEARCH`
+    - `lookup_size:int`: Superior limit to lookup, default value `MAX_DISP_LOOKUP`
 
     Returns:
     - Disparity map
@@ -86,7 +99,7 @@ def windowing_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH
+    lookup_size:int = MAX_DISP_LOOKUP
 ) -> np.ndarray:
     """Disparity map using windowing comparison method
 
@@ -94,7 +107,7 @@ def windowing_disp_map(
     - `img_left:np.ndarray`: Left image
     - `img_right:np.ndarray`: Right image
     - `block_sz:int`: Filter size, default value `MIN_DISP_FILTER_SZ`
-    - `lookup_size:int`: Superior limit to lookup, default value `DISP_BLOCK_SEARCH`
+    - `lookup_size:int`: Superior limit to lookup, default value `MAX_DISP_LOOKUP`
 
     Returns:
     - Disparity map
@@ -102,8 +115,7 @@ def windowing_disp_map(
     disp_map = np.zeros_like(img_left)
     padding = int(block_sz / 2)
 
-    accept_diff = 12
-    accept_diff *= block_sz + 1
+    accept_diff_base = 12
 
     img_left = np.pad(
         img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
@@ -130,7 +142,7 @@ def windowing_disp_map(
             if x_match != -1:
                 try:
                     search = np.sum(search[x_match])
-                    x_match = x_match + x_r_min + padding if search <= accept_diff else -1
+                    x_match = x_match + x_r_min + padding if search <= (accept_diff_base * ref.size) else -1
                 except:
                     input(f'match: {x_match} | search:\n{search}')
                     x_match = -1
@@ -144,7 +156,7 @@ def x_correlation_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH
+    lookup_size:int = MAX_DISP_LOOKUP
 ) -> np.ndarray:
     """Disparity map using cross correlation method
 
@@ -152,7 +164,7 @@ def x_correlation_disp_map(
     - `img_left:np.ndarray`: Left image
     - `img_right:np.ndarray`: Right image
     - `block_sz:int`: Filter size, default value `MIN_DISP_FILTER_SZ`
-    - `lookup_size:int`: Superior limit to lookup, default value `DISP_BLOCK_SEARCH`
+    - `lookup_size:int`: Superior limit to lookup, default value `MAX_DISP_LOOKUP`
 
     Returns:
     - Disparity map
@@ -204,7 +216,7 @@ def linear_search_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH
+    lookup_size:int = MAX_DISP_LOOKUP
 ) -> np.ndarray:
     """Disparity map using single linear search method
 
@@ -212,16 +224,14 @@ def linear_search_disp_map(
     - `img_left:np.ndarray`: Left image
     - `img_right:np.ndarray`: Right image
     - `block_sz:int`: Filter size, default value `MIN_DISP_FILTER_SZ`
-    - `lookup_size:int`: Superior limit to lookup, default value `DISP_BLOCK_SEARCH`
+    - `lookup_size:int`: Superior limit to lookup, default value `MAX_DISP_LOOKUP`
 
     Returns:
     - Disparity map
     """
     disp_map = np.zeros_like(img_left)
 
-    accept_diff = 12
-    accept_diff *= block_sz + 1
-
+    accept_diff_base = 12
 
     for y in range(img_left.shape[0]):
         # print(f'linha: {y}', end='\r')
@@ -240,7 +250,7 @@ def linear_search_disp_map(
                 x_match = int(closest_idx(search_box, 0) / ref.size)
                 search = np.sum(search_box[x_match])
 
-                x_match = x_match + x_min if search <= accept_diff else -1
+                x_match = x_match + x_min if search <= (accept_diff_base * ref.size) else -1
 
             disp_map[y, x_l] = max(0, x_l - x_match) if x_match != 1 else -1
 
@@ -251,7 +261,7 @@ def slow_adaptative_windowing_disp_map(
     img_left:np.ndarray,
     img_right:np.ndarray,
     block_sz:int = MIN_DISP_FILTER_SZ,
-    lookup_size:int = DISP_BLOCK_SEARCH
+    lookup_size:int = MAX_DISP_LOOKUP
 ) -> np.ndarray:
     """Disparity map using windowing method with raw python, so it can takes a while
 
@@ -259,7 +269,7 @@ def slow_adaptative_windowing_disp_map(
     - `img_left:np.ndarray`: Left image
     - `img_right:np.ndarray`: Right image
     - `block_sz:int`: Filter size, default value `MIN_DISP_FILTER_SZ`
-    - `lookup_size:int`: Superior limit to lookup, default value `DISP_BLOCK_SEARCH`
+    - `lookup_size:int`: Superior limit to lookup, default value `MAX_DISP_LOOKUP`
 
     Returns:
     - Disparity map
@@ -304,47 +314,6 @@ def slow_adaptative_windowing_disp_map(
             matched[y, x_match] = 1
 
     return disp_map
-
-
-
-    disp_map = np.zeros_like(img_left).astype(np.int32)
-    padding = 1
-
-    accept_diff = 12
-    accept_diff *= (((padding * 2) + 1) ** 2)
-
-    img_left = np.pad(
-        img_left, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
-    ).astype(np.int32)
-    img_right = np.pad(
-        img_right, [(padding, padding), (padding, padding)], mode='constant', constant_values=0
-    ).astype(np.int32)
-
-    for unpadded_y, y in enumerate(range(padding, img_left.shape[0] - padding)):
-        # print(f'linha: {unpadded_y}', end='\r')
-
-        y_min, y_max = max(0, y - padding), min(y + padding + 1, img_left.shape[0])
-
-        for unpadded_x, x_l in enumerate(range(padding, img_left.shape[1] - padding)):
-            x_l_min, x_max = max(0, x_l - padding), min(x_l + padding + 1, img_left.shape[1])
-            x_r_min = max(0, x_l_min - lookup_size)
-
-            ref = img_left[y_min:y_max, x_l_min:x_max]
-            search_box = img_right[y_min:y_max, x_r_min:x_max]
-            search_box = rolling_window_2D(search_box, ref)[0]
-
-            if search_box.shape[0] == 1:
-                x_match = x_l - 1
-            else:
-                search = np.sum(np.sum(np.abs(search_box - ref), axis=1), axis=1)
-                x_match_ = closest_idx(search, 0)
-                search = search[x_match_]
-
-                x_match = x_match + x_r_min + padding
-
-            disp_map[unpadded_y, unpadded_x] = max(0, x_l - x_match) if x_match != 1 else -1
-
-    return _minimize_invalid_pxl(disp_map)
 
 
 def _minimize_invalid_pxl(orig: np.ndarray) -> np.ndarray:
