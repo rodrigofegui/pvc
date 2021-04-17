@@ -1,0 +1,17 @@
+Desafio 4: detecção e reconhecimento de objetos
+
+Faça um programa que detecte um objeto (por exemplo, faces humanas) e seja capaz de classificá-los em tempo-real (caso de faces, reconhecer as pessoas).
+
+Sugiro o uso do detector de Viola & Jones e classificadores baseados em Histograms of Local Binary Patterns, porém os alunos podem propor outros métodos.
+
+
+Regras:
+Entregas e apresentações realizadas com sucesso poderão dar um bônus de até 10% na nota do Projeto 2. Esta avaliação é individual.
+Assim como nos desafios anteriores, duas coisas são necessárias para que seu trabalho valha bônus na nota:
+
+    Seu programa (bem documentado) deve ser enviado por aqui até o horário definido abaixo.
+    Você deve apresentá-lo funcionando, ao vivo, no horário da primeira aula que houver após a data/hora definida abaixo. Sua demonstração deve ser feita compartilhando a tela do seu PC, usando sua câmera.
+
+Quem tiver dificuldades de apresentar no horário da aula por questão de qualidade da conexão pode gravar um vídeo e compartilhá-lo via MS-Teams após o horário da entrega do projeto.
+
+Atenção: há um limite de 5 MB para entregas nesta atividade. Caso seja necessário compartilhar mais dados para que seu programa funcione (por exemplo, conjunto de treinamento), isso deve ser feito usado o MS-Teams e sua documentação deve incluir o link para obter tais dados.
