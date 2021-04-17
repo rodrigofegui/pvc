@@ -5,8 +5,8 @@ import cv2 as cv
 import face_recognition
 import numpy as np
 
-from .utils import get_absolute_path
-from .variables import CLASSIFIER_NEIGHBORS, CLASSIFIER_SCALE
+from utils import get_absolute_path
+from variables import CLASSIFIER_NEIGHBORS, CLASSIFIER_SCALE
 
 
 def detect(img_src: np.ndarray, classifier) -> list:
@@ -25,8 +25,8 @@ def get_lib_face_recognition_features(training_dir: str) -> tuple:
     Returns:
     - Detected encoders ans its names
     """
-    known_encoders_file = get_absolute_path('../resources/known_encoders.npy')
-    known_names_file = get_absolute_path('../resources/known_names.npy')
+    known_encoders_file = get_absolute_path('../resources/known_encoders_lib_face_recognition.npy')
+    known_names_file = get_absolute_path('../resources/known_names_lib_face_recognition.npy')
 
     known_encoders = np.load(known_encoders_file, allow_pickle=True) if exists(known_encoders_file) else np.asarray([])
     known_names = np.load(known_names_file, allow_pickle=True) if exists(known_names_file) else np.asarray([])

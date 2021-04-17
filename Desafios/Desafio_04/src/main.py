@@ -1,7 +1,7 @@
 import cv2 as cv
 import numpy as np
 
-from .face_detection import get_lib_face_recognition_features, lib_face_recognition
+from face_detection import get_lib_face_recognition_features, lib_face_recognition
 
 
 def main(face_recognition_method):
