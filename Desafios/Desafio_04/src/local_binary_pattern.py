@@ -2,12 +2,14 @@ import cv2 as cv
 import numpy as np
 from skimage import feature
 
+from variables import LBP_NEIGHBORS, LBP_RADIUS
+
 
 class LocalBinaryPatterns:
     """Based on: https://www.pyimagesearch.com/2015/12/07/local-binary-patterns-with-python-opencv/"""
     def __init__(self) -> None:
-        self._num_points = 16
-        self._radius = 2
+        self._num_points = LBP_NEIGHBORS
+        self._radius = LBP_RADIUS
 
     def cvt_image(self, src: np.ndarray) -> np.ndarray:
         if len(src.shape) == 3:

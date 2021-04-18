@@ -1,17 +1,24 @@
 import cv2 as cv
 import numpy as np
+from data_aquisition import DataAquisition
+from utils import get_absolute_path, stackImages
+from face_recognizer import FaceRecognizer
 
-from utils import stackImages, get_absolute_path
-from face_detection import get_lib_face_recognition_features, lib_face_recognition, manual_face_recognition, get_manual_face_recognition_features
 
-
-def main(face_recognition_method = None):
-    if face_recognition_method == lib_face_recognition:
-        known_encoders, known_names = get_lib_face_recognition_features('images/training/')
-    else:
-        known_encoders, known_names = get_manual_face_recognition_features('images/training/')
-
+def main(face_recognition_method: str = None):
     webcam = cv.VideoCapture(0)
+
+    data_aquisition = DataAquisition(
+        dataset_dir='images/training/',
+        resources_dir='resources/'
+    )
+    face_recognizer = FaceRecognizer(
+        resources_dir='resources/',
+        recognizer_name=face_recognition_method
+    )
+
+    known_people = data_aquisition.create_dataset(webcam)
+    ret = data_aquisition.train(face_recognition_method)
 
     while True:
         if cv.waitKey(1) & 0xFF == ord('q'):
@@ -19,7 +26,7 @@ def main(face_recognition_method = None):
 
         _, c_frame = webcam.read()
 
-        c_frame = face_recognition_method(c_frame, known_encoders, known_names)
+        c_frame, face_locations, labels, factors = face_recognizer.predict(c_frame, known_people)
 
         cv.imshow('webcam', c_frame)
 
@@ -27,4 +34,5 @@ def main(face_recognition_method = None):
     cv.destroyAllWindows()
 
 if __name__ == '__main__':
-    main(manual_face_recognition)
+    # main('lib_face_recognition')
+    main('heuristic')

@@ -1,5 +1,5 @@
+import os
 from inspect import stack
-from os.path import dirname, realpath, sep
 
 import cv2 as cv
 import numpy as np
@@ -54,7 +54,7 @@ def stackImages(scale: float = 1., images: None = []) -> np.ndarray:
     return ver
 
 
-def get_absolute_path(relative_path: str = '', known_path: str = ''):
+def get_absolute_path(relative_path: str = '.', known_path: str = '') -> str:
     '''Considering an known absolute path as start point and a relative path,
     a absolute path is put together
 
@@ -67,11 +67,20 @@ def get_absolute_path(relative_path: str = '', known_path: str = ''):
     '''
     known_path = known_path or stack()[1].filename
 
-    known_path = dirname(realpath(known_path)).split(sep)
-    relative_path = relative_path.split(sep)
+    known_path = os.path.dirname(os.path.realpath(known_path)).split(os.path.sep)
+    relative_path = relative_path.split(os.path.sep)
 
     while relative_path[0] == '..':
         relative_path.pop(0)
         known_path.pop()
 
-    return sep.join(known_path + relative_path)
+    return os.path.sep.join(known_path + relative_path)
+
+
+def make_sure_dir_exists(dir_name: str) -> str:
+    dir_name = os.path.dirname(dir_name)
+
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
+
+    return dir_name
