@@ -2,26 +2,27 @@ import os
 
 import cv2 as cv
 import numpy as np
-from utils import make_sure_dir_exists
+from utils import make_sure_path_exists
 from variables import (ALLOWED_METHODS, CLASSIFIER_NEIGHBORS, CLASSIFIER_SCALE, FACE_BOX_COLOR, FACE_TXT_COLOR,
-                       HEURISTIC_CERTAIN, HEURISTIC_FILE, LIB_FACE_RECOGNITION_FILE)
+                       HEURISTIC_CERTAIN, HEURISTIC_FILE_PREFIX, LIB_FACE_RECOGNITION_FILE_PREFIX)
 
 
 class FaceRecognizer:
+    """Based on: https://github.com/Harmouch101/Face-Recogntion-Detection"""
     def __init__(
         self,
         resources_dir: str = 'resources',
         recognizer_name: str = 'lbph_machinelearning',
         face_detector_name: str = 'haarcascade_frontalface_alt.xml',
     ) -> None:
-        self.resources_dir = make_sure_dir_exists(resources_dir)
+        self.resources_dir = make_sure_path_exists(resources_dir)
 
         self.face_detector = cv.CascadeClassifier(cv.data.haarcascades + face_detector_name)
 
         self._set_recognizer(recognizer_name)
 
     def predict(self, image: np.ndarray, labels_translation: dict = {}) -> tuple:
-        face_locations, labels, factors = getattr(self, f'_prediction_{self.recognizer}')(image)
+        face_locations, labels, factors = getattr(self, f'_prediction_{self._recognizer_name}')(image)
 
         if labels_translation:
             for ind, (x1, y1, x2, y2) in enumerate(face_locations):
@@ -39,12 +40,19 @@ class FaceRecognizer:
         if recognizer_name not in ALLOWED_METHODS:
             raise Exception('Reconhecimento de face desconhecido')
 
-        self.recognizer = recognizer_name
+        self._recognizer_name = recognizer_name
 
         if recognizer_name == 'lbph_machinelearning':
+            from variables import LBP_GRID_X, LBP_GRID_Y, LBP_NEIGHBORS, LBP_RADIUS, LBPH_MACHINE_LEARNING_FILE
+
+            self.recognizer = cv.face.LBPHFaceRecognizer_create(
+                LBP_RADIUS, LBP_NEIGHBORS, LBP_GRID_X, LBP_GRID_Y
+            )
+            self.recognizer.read(os.path.join(self.resources_dir, LBPH_MACHINE_LEARNING_FILE))
+
             return
 
-        file_prefix = HEURISTIC_FILE if recognizer_name == 'heuristic' else LIB_FACE_RECOGNITION_FILE
+        file_prefix = HEURISTIC_FILE_PREFIX if recognizer_name == 'heuristic' else LIB_FACE_RECOGNITION_FILE_PREFIX
 
         descriptors_file = os.path.join(self.resources_dir, f'{file_prefix}_desc.npy')
         labels_file = os.path.join(self.resources_dir, f'{file_prefix}_labels.npy')
@@ -103,6 +111,7 @@ class FaceRecognizer:
             min_dist_at = np.argmin(face_dist)
 
             diff = face_dist[min_dist_at] / np.linalg.norm(descriptor)
+            print('diff', diff)
 
             labels.append(self.known_labels[min_dist_at] if diff <= HEURISTIC_CERTAIN else -1)
 
@@ -111,4 +120,19 @@ class FaceRecognizer:
         return face_locations, labels, factors
 
     def _prediction_lbph_machinelearning(self, image):
-        pass
+        face_locations, labels, factors = [], [], []
+
+        if len(image.shape) == 3:
+            image_gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+
+        for x, y, w, h in self.face_detector.detectMultiScale(image_gray, CLASSIFIER_SCALE, CLASSIFIER_NEIGHBORS):
+            x1, y1, x2, y2 = x, y, x + w, y + h
+
+            face_locations.append((x1, y1, x2, y2))
+
+            label, factor = self.recognizer.predict(image_gray[y1: y2, x1: x2])
+
+            labels.append(label if factor >= 100 else -1)
+            factors.append(factor)
+
+        return face_locations, labels, factors

@@ -77,10 +77,14 @@ def get_absolute_path(relative_path: str = '.', known_path: str = '') -> str:
     return os.path.sep.join(known_path + relative_path)
 
 
-def make_sure_dir_exists(dir_name: str) -> str:
-    dir_name = os.path.dirname(dir_name)
+def make_sure_path_exists(path_name: str, is_dir: bool = True) -> str:
+    if is_dir:
+        path_name = os.path.dirname(path_name)
 
-    if not os.path.exists(dir_name):
-        os.makedirs(dir_name)
+    if not os.path.exists(path_name):
+        if is_dir:
+            os.makedirs(path_name)
+        else:
+            os.mknod(path_name)
 
-    return dir_name
+    return path_name

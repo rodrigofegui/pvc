@@ -1,7 +1,5 @@
 import cv2 as cv
-import numpy as np
 from data_aquisition import DataAquisition
-from utils import get_absolute_path, stackImages
 from face_recognizer import FaceRecognizer
 
 
@@ -12,13 +10,21 @@ def main(face_recognition_method: str = None):
         dataset_dir='images/training/',
         resources_dir='resources/'
     )
+
+    known_people = data_aquisition.create_dataset(webcam)
+
+    if len(known_people) == 1:
+        print('Should have any face to recognition')
+        return
+
+    print('Training model...')
+    data_aquisition.train(face_recognition_method)
+
+    print('Initialzing face recognizer...')
     face_recognizer = FaceRecognizer(
         resources_dir='resources/',
         recognizer_name=face_recognition_method
     )
-
-    known_people = data_aquisition.create_dataset(webcam)
-    ret = data_aquisition.train(face_recognition_method)
 
     while True:
         if cv.waitKey(1) & 0xFF == ord('q'):
@@ -33,6 +39,10 @@ def main(face_recognition_method: str = None):
     webcam.release()
     cv.destroyAllWindows()
 
+
 if __name__ == '__main__':
+    """Available methods: 'lib_face_recognition' | 'heuristic' | 'lbph_machinelearning'
+    """
     # main('lib_face_recognition')
-    main('heuristic')
+    # main('heuristic')
+    main('lbph_machinelearning')
